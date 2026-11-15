@@ -1,0 +1,49 @@
+# Checks Music Together on every push to main and every pull request: the room
+# server with its tests, and the scripts and JSON files of the extension.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+
+      - name: Formatting
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - run: go vet ./...
+
+      - run: go test -race ./...
+
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The extension has no build step, so its scripts are checked as they are.
+      - name: Syntax of the scripts
+        run: find extension -name '*.js' -print0 | xargs -0 -n 1 node --check
+
+      - name: JSON files
+        run: find extension -name '*.json' -print0 | xargs -0 -n 1 jq empty

@@ -1,0 +1,822 @@
+/* A light page, white panels with a thin line and a soft shadow, a teal
+   accent and heavy type. Every corner uses the same radius, and sizes are
+   kept small for a toolbar popup. */
+:root {
+  --background: #f6f7f5;
+  --panel: #ffffff;
+  --panel-soft: #eef2ef;
+  --text: #191d1b;
+  --muted: #68706b;
+  --line: #d9dfda;
+  --accent: #087f8c;
+  --accent-strong: #056672;
+  --accent-soft: #eef9fa;
+  --accent-line: #9bd5da;
+  --red: #b83d35;
+  --red-bg: #ffe5e2;
+  --red-line: #f1b1aa;
+  --radius: 6px;
+  --shadow: 0 8px 24px rgba(25, 29, 27, 0.07);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 320px;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+}
+
+p,
+h1,
+h2,
+ul,
+dl,
+dd {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input {
+  color: inherit;
+  font: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sprite {
+  display: none;
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* Top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.brand-mark .icon {
+  width: 14px;
+  height: 14px;
+}
+
+h1 {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The settings button is as tall as the leave button beside it. */
+.topbar .icon-button {
+  width: 26px;
+  height: 26px;
+}
+
+/* The title and the buttons of the top bar stay on one line. */
+.topbar h1,
+.topbar .button {
+  white-space: nowrap;
+}
+
+main {
+  padding: 0 10px 10px;
+}
+
+/* A grid column widens to fit its longest unbreakable line, and song titles
+   and names are kept on one line. So the grids that hold them use
+   minmax(0, 1fr): the column stays as wide as the popup and the text is cut. */
+.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* Buttons */
+
+.primary {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.primary:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.primary:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.button.danger {
+  border-color: var(--red-line);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.square {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.square:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.square.primary-square {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.square.primary-square:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.icon-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-button .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-button:disabled {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: default;
+}
+
+/* Removing a song from the queue: a thin cross, faint until the row is
+   pointed at, and red when it is about to be pressed. */
+.icon-button.remove-button {
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.45;
+  transition:
+    opacity 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.icon-button.remove-button .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.list li:hover .remove-button,
+.remove-button:focus-visible {
+  opacity: 1;
+}
+
+.icon-button.remove-button:hover {
+  border-color: transparent;
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+/* No tab, reload */
+
+.message {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  font-weight: 700;
+}
+
+/* Lobby */
+
+.choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.choice-button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.choice-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.choice-button[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.field input {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.field input.code {
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.alert {
+  padding: 8px 10px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+/* Room */
+
+.conn {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Now playing */
+
+.now {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.now-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.controls {
+  display: flex;
+  gap: 4px;
+}
+
+#toggle .pause,
+#toggle.playing .play {
+  display: none;
+}
+
+#toggle.playing .pause {
+  display: block;
+}
+
+/* The visualizer is drawn by popup.js on this canvas. */
+.viz {
+  display: block;
+  width: 100%;
+  height: 52px;
+}
+
+/* Songs */
+
+.art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.art.large {
+  width: 40px;
+  height: 40px;
+}
+
+.art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.title,
+.sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title.marquee,
+.sub.marquee {
+  text-overflow: clip;
+}
+
+/* popup.js slides the text in this span. */
+.title.marquee > span,
+.sub.marquee > span {
+  display: inline-block;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.now .title {
+  font-size: 13px;
+}
+
+/* The artists, then who added the song. The artists give way first, so the
+   name stays in sight. */
+.sub-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sub-row .sub {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.by {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  max-width: 50%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.by .icon {
+  width: 11px;
+  height: 11px;
+}
+
+.by .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Queue */
+
+.queue {
+  padding: 6px 4px 4px;
+}
+
+.section-title {
+  padding: 0 6px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* Search */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.search .icon {
+  color: var(--muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-weight: 700;
+}
+
+/* Lists */
+
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-y: auto;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+}
+
+.list li:hover {
+  background: var(--background);
+}
+
+.list li + li {
+  border-top: 1px solid var(--panel-soft);
+}
+
+/* Reordering: a song that can be moved shows a hand. While it is dragged it
+   lifts above the others, which slide aside to make room. */
+.list li.movable {
+  cursor: grab;
+  user-select: none;
+}
+
+.sorting,
+.sorting li {
+  cursor: grabbing;
+}
+
+.sorting li {
+  transition: transform 160ms ease;
+}
+
+.sorting li.dragging {
+  position: relative;
+  z-index: 1;
+  border-top-color: transparent;
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgba(25, 29, 27, 0.16);
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sorting li {
+    transition: none;
+  }
+}
+
+#queue {
+  max-height: 200px;
+}
+
+.results {
+  max-height: 240px;
+  padding: 4px;
+}
+
+.list-message {
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Room facts */
+
+.room-card {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.facts {
+  display: grid;
+  gap: 4px;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.facts dd {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facts dd.absent {
+  color: var(--muted);
+}
+
+/* The participants: a row that opens into one name per line. */
+.guests summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  min-height: 22px;
+  margin-left: -4px;
+  padding: 0 4px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.guests summary::-webkit-details-marker {
+  display: none;
+}
+
+.guests summary:hover {
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.guests .chevron {
+  width: 12px;
+  height: 12px;
+  transition: transform 160ms ease;
+}
+
+.guests[open] .chevron {
+  transform: rotate(90deg);
+}
+
+.guest-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* The first name sits on the same line as the label, like the other rows. */
+  margin-top: -22px;
+  padding-left: 72px;
+}
+
+.guest-list li {
+  overflow: hidden;
+  line-height: 22px;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -4px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  font: 800 15px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.room-id:hover {
+  border-color: var(--line);
+  background: var(--panel-soft);
+}
+
+.room-id .icon {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.switch input {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border-radius: var(--radius);
+  background: var(--line);
+  appearance: none;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.switch input::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(25, 29, 27, 0.3);
+  content: "";
+  transition: transform 160ms ease;
+}
+
+.switch input:checked {
+  background: var(--accent);
+}
+
+.switch input:checked::after {
+  transform: translateX(12px);
+}
+
+/* Toast */
+
+.toast {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: var(--shadow);
+}

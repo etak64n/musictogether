@@ -1,0 +1,27 @@
+# Renders extension/icons/icon.svg into the PNG sizes Chrome needs (Chrome
+# cannot use SVG for extension icons). Run it by hand after changing the SVG,
+# then commit the PNGs from the "icons" artifact into extension/icons.
+name: Icons
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Render
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librsvg2-bin
+          for size in 16 32 48 128; do
+            rsvg-convert -w "$size" -h "$size" -o "extension/icons/icon$size.png" extension/icons/icon.svg
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: icons
+          path: extension/icons/*.png

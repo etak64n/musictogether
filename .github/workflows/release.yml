@@ -1,0 +1,41 @@
+# Packages the extension when a version tag is pushed, and publishes the zip
+# as a release for people to download. The folder in the zip has the same name
+# in every release, so that people who replace the folder keep their settings.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the versions match the tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          manifest="$(jq -r .version extension/manifest.json)"
+          if [ "$manifest" != "$version" ]; then
+            echo "extension/manifest.json is $manifest, but the tag is $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          if ! grep -q "const version = \"$version\"" server/main.go; then
+            echo "server/main.go does not say version $version" >&2
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          mkdir dist
+          cp -R extension dist/musictogether
+          (cd dist && zip -r -X "musictogether-$GITHUB_REF_NAME.zip" musictogether)
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "dist/musictogether-$GITHUB_REF_NAME.zip" --title "Music Together $GITHUB_REF_NAME" --generate-notes --verify-tag

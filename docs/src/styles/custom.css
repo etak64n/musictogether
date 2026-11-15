@@ -1,0 +1,13 @@
+/* The teal of the extension's icon and popup, in the dark theme of Starlight
+   and in its light theme. */
+:root {
+  --sl-color-accent-low: #0b3539;
+  --sl-color-accent: #2aa5b2;
+  --sl-color-accent-high: #b8e8ec;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d9f1f3;
+  --sl-color-accent: #087f8c;
+  --sl-color-accent-high: #04454c;
+}
