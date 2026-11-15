@@ -5,10 +5,13 @@
 // say: a mini window under the button, which is the default, or Chrome's side
 // panel on the right of the window. The side panel is turned off while the
 // mini window is chosen, so that it does not show in Chrome's list of panels.
+// The mini window carries ?mini=1, so that the page tells it from the side panel.
+const MINI_WINDOW = 'popup/popup.html?mini=1';
+
 async function applyDisplay() {
   const { display } = await chrome.storage.local.get('display');
   const panel = display === 'panel';
-  await chrome.action.setPopup({ popup: panel ? '' : 'popup/popup.html' });
+  await chrome.action.setPopup({ popup: panel ? '' : MINI_WINDOW });
   await chrome.sidePanel.setOptions({ enabled: panel });
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: panel });
 }
@@ -139,6 +142,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     });
     return true;
+  }
+
+  // YouTube Music installed as an app has a window of its own, which has no
+  // side panel. The button opens the mini window for its tab, whatever the
+  // settings choose.
+  if (message.type === 'app-window') {
+    chrome.action.setPopup({ tabId, popup: MINI_WINDOW }).catch(() => {});
+    chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+    return false;
+  }
+
+  // The window on top, which a tab of YouTube Music opens, shows that tab.
+  if (message.type === 'which-tab') {
+    sendResponse({ tabId });
+    return false;
   }
 
   if (message.type === 'which-room') {

@@ -79,8 +79,9 @@ A server behind Cloudflare listens on an address that only Cloudflare reaches, a
 | Connections on one server | 500 |
 | Connections in one room | 50 |
 | Rooms that one address creates in an hour | 20 |
-| Songs waiting in a room | 200 |
-| Songs that played, kept in a room | 50 |
+| Songs waiting in each queue of a room | 200 |
+| Songs that played, kept in a room | 500 |
+| Songs that played, sent with a room | 50 |
 | Characters in a member's name | 30 |
 | Characters in a title, an artist list, or an album | 200 |
 | Time that an unused room is kept | 1 hour |

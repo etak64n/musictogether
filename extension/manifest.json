@@ -33,6 +33,16 @@
   "host_permissions": [
     "https://music.youtube.com/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup/popup.html"
+      ],
+      "matches": [
+        "https://music.youtube.com/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [

@@ -1,6 +1,6 @@
 ---
 title: Listen in a room
-description: Create or join a room, add songs to its queue, reorder them, and pause your own player without stopping anyone else.
+description: Create or join a room, add songs to its queues, reorder them, save them as a playlist, and pause your own player without stopping anyone else.
 ---
 
 A **room** is a queue of songs and a position in the current song, which the room server keeps for a group of people.
@@ -35,25 +35,49 @@ With a room ID in place of a link:
 
 Everyone in the room sees the names of the others, each after a mark of their player: bars while it plays, and ⏸ while it is paused.
 
+## The queues
+
+A room has two queues of songs that wait:
+
+- **Main** holds the songs that people ask for. They play in their order.
+- **Standby** holds songs that may wait. They play once Main is empty. A song added to Main while a song of Standby plays comes next.
+
+A song added to Standby takes a random place in it, so that a whole album or playlist that one person adds mixes with the songs of the others. A song dropped at a place in Standby keeps that place.
+
+The panel Main of the popup lists the songs that have played in gray, up to the last 50, then the song that plays in a frame, then the songs that wait in Main, then Standby. Standby is folded below Main, with the number of its songs; a click on its heading opens it. When a song finishes, the list scrolls so that the song that played last is at its top.
+The list shows a few songs at a time. When its songs do not fit, an arrow at its top makes it reach down to the bottom of the window, and folds it again; the songs that showed at the top stay in view through both. A longer list scrolls.
+
 ## Add songs
 
-A song reaches the room in either of these ways:
+A song reaches a queue in these ways:
 
-- Search in the search field of the popup, and click ＋ next to the song.
-- In YouTube Music, open the ⋮ menu of a song, and choose Add to Music Together. The item is in the menus of every YouTube Music tab while this Chrome is in a room, and appears in the menus that have Add to queue.
-- In YouTube Music, open the ⋮ menu of an album or a playlist, and choose Add to Music Together. Its songs join the end of the Queue in their order, except the songs that YouTube Music cannot play for your account. When the Queue has room for fewer songs than the album, the first ones are added, and YouTube Music shows how many.
-- In the Queue, click ＋ next to a song that has played to add it again.
+- Search in the search field of the popup, and click ＋ next to the song for Main, or the hourglass for Standby.
+- In YouTube Music, open the ⋮ menu of a song, an album, or a playlist, and choose Add to Music Together (Main) or Add to Music Together (Standby). The items are in the menus of every YouTube Music tab while this Chrome is in a room, and appear in the menus that have Add to queue. An album or a playlist adds its songs in their order, except the songs that YouTube Music cannot play for your account. When the queue has room for fewer songs, the first ones are added, and YouTube Music shows how many.
+- In Main, click ＋ next to a song that has played to add it to Main again.
+- Drag a song, an album, or a playlist from YouTube Music, and drop it among the songs of the side panel or of the window on top. A line shows the place where it goes, in Main or in Standby. Dropped on the heading of a folded Standby, it takes a random place in Standby; dropped anywhere else in the room, it goes to the end of Main. The mini window closes as soon as YouTube Music is clicked, so it takes no drops.
 
-A song added to a room where nothing plays starts at once. Any other song waits at the end of the Queue.
-The Queue and the playing song show the name of the person who added each song, after its artists.
-While Chrome is in a room, the button of Music Together shows the number of songs waiting in the Queue, up to 99.
+A song added to a room where nothing plays starts at once.
+Each song shows the name of the person who added it, at the end of the line of its artists.
+While Chrome is in a room, the button of Music Together shows the number of songs waiting in Main, up to 99.
 
-The Queue lists the songs that have played in gray, up to the last 50, then the song that plays in a frame, then the songs that wait. When a song finishes, the Queue scrolls so that the song that played last is at its top.
-The Queue shows a few songs at a time. When its songs do not fit, an arrow at its top makes it reach down to the bottom of the window, and folds it again; the songs that showed at the top stay in view through both. A Queue longer than that scrolls.
+## Save the songs as a playlist
 
-## Reorder the queue
+The button with lines and a plus, at the top of the panel Main, saves the songs that played in the room as a private playlist of your YouTube Music: up to the last 500 of them, oldest first, and the song that plays, each once. The playlist is named Music Together with the date and the time.
+When the playlist is made, the popup shows a message with Open, which opens the playlist in a new tab.
 
-Drag a waiting song in the Queue up or down. The first waiting song plays next. The songs that have played stay where they are.
+## Open the window on top
+
+The note at the right of the top bar of YouTube Music, before the cast button, opens Music Together in a small window that stays on top of every other window. The window shows the same screen as the popup, for that tab of YouTube Music, at the height of the window.
+Click the note again to close the window. The window also closes when its tab of YouTube Music closes or reloads.
+Chrome keeps the window well inside the screen: at most about two thirds of the screen's height. The window can be made as narrow as 240 pixels; narrower than 320 pixels, the screen of Music Together is scaled down to the width.
+
+## Use YouTube Music installed as an app
+
+YouTube Music installed as an app runs in a window of its own, which has no side panel. Its tabs follow rooms as tabs in Chrome do. The button of Music Together is in the menu of extensions, the puzzle piece, in the title bar of the app's window, and opens the mini window whatever the settings choose. The note for the window on top is not in the app's top bar.
+
+## Reorder the queues
+
+Drag a waiting song up or down: within Main, within Standby, or across the heading of Standby from one queue to the other. Over a folded Standby, the song goes to the end of Standby. The songs that have played stay where they are.
 Reordering needs the host, or the host's permission, which a new room gives to participants.
 
 ## Pause your own player
@@ -66,7 +90,7 @@ The others see ⏸ before your name while your player is paused.
 
 - While Chrome is in a room, the tab of the room plays the room's songs. A song started in that tab by hand is replaced by the room's song. While nothing plays in the room, the tab plays anything.
 - Chrome is in one room at a time, in one tab. Joining in another tab takes the first tab out of the room.
-- When a song ends, the room plays the first song waiting in the Queue. When no song waits, the room stops, and the autoplay and radio of YouTube Music do not continue it.
+- When a song ends, the room plays the first song waiting in Main, or the first of Standby when Main is empty. When no song waits, the room stops, and the autoplay and radio of YouTube Music do not continue it.
 - The room moves forward while at least one member listens. When every member has paused, the room stops at that position, and it moves on from there when someone plays again.
 - When every listening member has left the room, the room waits 30 seconds for them to connect again, and then stops at its position.
 - A room that nobody is in or changes for an hour is deleted. Leaving a room open in a tab keeps it.

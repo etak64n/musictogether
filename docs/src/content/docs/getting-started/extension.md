@@ -40,7 +40,7 @@ Chrome opens the mini window below the button, so dragging the button to the rig
 
 ## Fill in the settings
 
-The extension has four settings, which show in the popup itself. The gear at the top right of the popup opens them in place of the room, and closes them again.
+The extension has four settings, which show in the popup itself. The gear at the top right of the popup opens them in place of the room, and closes them again. In YouTube Music installed as an app, the button of Music Together is in the menu of extensions in the title bar of the app's window, and opens the mini window.
 
 | Setting | Value |
 | --- | --- |

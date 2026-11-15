@@ -90,6 +90,21 @@ So the invite script runs at `document_start`, before any script of the page. It
 The room script then joins the room with the name and the room server of the settings. When the settings lack them, the room script keeps the room ID, and the popup shows it in its lobby.
 The link carries the room ID only. The address and the token of the room server stay in each member's settings, so a link cannot send a token to a server that its member did not choose.
 
+## The window on top
+
+The room script puts a button in the top bar of YouTube Music. A click on it opens a window with Chrome's Document Picture-in-Picture API, which keeps the window on top of the others and allows it to open only from a click in the page.
+The window holds the popup's page in a frame, with the ID of the tab in its address: `popup/popup.html?pip=1&tab=ID`. The manifest lists that page in `web_accessible_resources` for YouTube Music, so that the page of YouTube Music can load it. In the frame, the page keeps its access to the extension, and connects to the tab of the address in place of finding one.
+The window belongs to the tab that opened it, and closes with it.
+YouTube Music installed as an app shows its page in a display mode other than `browser`. There, the room script puts no button, and asks the service worker to give the tab the mini window: the popup of the tab's button, with the side panel turned off for the tab, because the app's window has no side panel.
+
+## Dropped songs
+
+The popup takes links that are dropped on the room: a song (`watch?v=`), a playlist (`playlist?list=`), or an album (`browse/MPREb_…`). It passes them to the tab. The page script looks up a song or a playlist as the ⋮ menu does. For an album, it first asks YouTube Music for the album's page, which names the playlist of the album's songs.
+
+## The playlist of songs that played
+
+The popup asks the tab in the room for the playlist. The room script fetches the songs that played from the room server (`POST /api/rooms/{id}/history`), adds the song that plays, and keeps each song once. The page script then makes a private playlist in YouTube Music with the request that YouTube Music itself sends for a new playlist, so the playlist belongs to the account that is signed in to YouTube Music.
+
 ## Storage of rooms
 
 The room server writes a room to a JSON file in `DATA_DIR/rooms/` after every change.

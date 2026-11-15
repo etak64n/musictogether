@@ -122,10 +122,16 @@
         deliverSearch(message);
         break;
       case 'menu-add':
-        addFromMenu({ track: message.track });
+        addFromMenu({ track: message.track, list: listOf(message), index: placeOf(message) }, message.source);
         break;
       case 'menu-add-list':
-        addFromMenu({ tracks: message.tracks });
+        addFromMenu({ tracks: message.tracks, list: listOf(message), index: placeOf(message) }, message.source);
+        break;
+      case 'drop-failed':
+        showNotice('drop_failed');
+        break;
+      case 'playlist-created':
+        finishPlaylist(message);
         break;
     }
   });
@@ -151,6 +157,7 @@
     }
     if (value !== 'ja' && value !== 'en') value = navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
     toPage({ type: 'language', value });
+    labelPipButton(value);
   }
 
   callChrome(() =>
@@ -491,20 +498,31 @@
     }
   }
 
+  // Songs wait in the queue, or in the standby queue, which plays once the
+  // queue is empty. A message names the standby queue as list: 'standby'.
+  const listOf = (message) => (message && message.list === 'standby' ? 'standby' : 'queue');
+  // The queue is left unnamed, which servers before the standby queue take too.
+  const listField = (list) => (list === 'standby' ? { list } : {});
+  // A song dropped at a place among the songs carries that place; others go to
+  // the end of the queue, or to a random place in the standby queue.
+  const placeOf = (message) => (Number.isInteger(message && message.index) && message.index >= 0 ? message.index : undefined);
+  const placeField = (songs) => ({ ...listField(songs.list), ...(songs.index === undefined ? {} : { index: songs.index }) });
+
   // Adds what was chosen in a menu of YouTube Music, in this tab or in another
   // one: { track } for a song, or { tracks } for the songs of an album or a
-  // playlist. Tells how it went as { code, count }: the code is added,
-  // partly_added when the queue took only some of the songs, queue_full, or
-  // failed, and count is the number of songs added.
+  // playlist, with the list they go to. Tells how it went as { code, count }:
+  // the code is added, partly_added when the list took only some of the songs,
+  // queue_full, or failed, and count is the number of songs added.
   async function addSongs(songs) {
     if (!conn || status !== 'connected' || !conn.sessionId) return { code: 'failed', count: 0 };
     const c = conn;
+    const list = placeField(songs);
     try {
       if (songs.track) {
-        await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'add', track: songs.track });
+        await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'add', track: songs.track, ...list });
         return { code: 'added', count: 1 };
       }
-      const response = await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'addTracks', tracks: songs.tracks });
+      const response = await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'addTracks', tracks: songs.tracks, ...list });
       const { added } = await response.json();
       return { code: added < songs.tracks.length ? 'partly_added' : 'added', count: added };
     } catch (e) {
@@ -512,9 +530,10 @@
     }
   }
 
-  // Songs added from YouTube Music's own menu. The page shows the result,
-  // because the popup is usually closed at that moment.
-  async function addFromMenu(songs) {
+  // Songs added from YouTube Music's own menu, or dropped on the popup. The
+  // page shows the result of the menu, because the popup is usually closed at
+  // that moment; the popup shows the result of a drop.
+  async function addFromMenu(songs, source) {
     let result = { code: 'failed', count: 0 };
     if (conn) {
       result = await addSongs(songs);
@@ -527,7 +546,14 @@
         // The extension was reloaded or updated.
       }
     }
-    toPage({ type: 'toast', code: result.code, count: result.count });
+    const list = listOf(songs);
+    if (source !== 'drop') {
+      toPage({ type: 'toast', code: result.code, count: result.count, list });
+      return;
+    }
+    const codes = { added: result.count > 1 ? 'drop_added_list' : 'drop_added', partly_added: 'drop_partly_added', queue_full: 'queue_full' };
+    const code = codes[result.code] || 'drop_failed';
+    showNotice(list === 'standby' && code !== 'drop_failed' ? `${code}_standby` : code, result.count);
   }
 
   // The room plays while anyone listens. Listening again to a room that
@@ -570,17 +596,23 @@
 
   // Reordering the queue needs the host or the host's permission, as skipping does.
   // The song is taken out and put back at index, so 0 plays it next.
-  function moveSong(itemId, index) {
+  // A song moves within its list, or to the list that the popup names.
+  function moveSong(itemId, index, list) {
     if (!room) return;
     if (!canControl()) {
       showNotice('host_only');
       return;
     }
-    command({ type: 'move', itemId, index }, (r) => {
-      const from = r.queue.findIndex((item) => item.id === itemId);
-      if (from < 0) return;
-      const [item] = r.queue.splice(from, 1);
-      r.queue.splice(Math.min(index, r.queue.length), 0, item);
+    const target = list === 'standby' || list === 'queue' ? { list } : {};
+    command({ type: 'move', itemId, index, ...target }, (r) => {
+      r.standby = r.standby || [];
+      const fromName = r.queue.some((item) => item.id === itemId) ? 'queue' : 'standby';
+      const from = r[fromName];
+      const at = from.findIndex((item) => item.id === itemId);
+      if (at < 0) return;
+      const [item] = from.splice(at, 1);
+      const to = r[target.list || fromName];
+      to.splice(Math.min(index, to.length), 0, item);
     });
   }
 
@@ -769,7 +801,7 @@
       invite,
       listening,
       room,
-      notice: notice && notice.until > Date.now() ? { id: notice.id, code: notice.code } : null,
+      notice: notice && notice.until > Date.now() ? { id: notice.id, code: notice.code, count: notice.count } : null,
       endingUntil: ending ? ending.until : null,
       // The popup's seek bar reads the room's timeline by the server's clock.
       clockOffset,
@@ -798,8 +830,8 @@
     }
   }
 
-  function showNotice(code) {
-    notice = { id: ++noticeSeq, code, until: Date.now() + NOTICE_MS };
+  function showNotice(code, count) {
+    notice = { id: ++noticeSeq, code, count, until: Date.now() + NOTICE_MS };
     publish();
   }
 
@@ -849,15 +881,16 @@
         startSearch(port, message);
         break;
       case 'add':
-        command({ type: 'add', track: message.track });
+        command({ type: 'add', track: message.track, ...listField(message.list) });
         break;
       case 'remove':
         command({ type: 'remove', itemId: message.itemId }, (r) => {
           r.queue = r.queue.filter((item) => item.id !== message.itemId);
+          if (r.standby) r.standby = r.standby.filter((item) => item.id !== message.itemId);
         });
         break;
       case 'move':
-        moveSong(message.itemId, message.index);
+        moveSong(message.itemId, message.index, message.list);
         break;
       case 'toggle':
         toggle();
@@ -882,6 +915,19 @@
         break;
       case 'undo-close':
         cancelEnding();
+        break;
+      case 'save-playlist':
+        savePlaylist(port, message);
+        break;
+      case 'drop':
+        {
+          // Several songs dropped at a place keep their order from there.
+          const start = placeOf(message);
+          const items = (Array.isArray(message.items) ? message.items.slice(0, MAX_DROPPED) : []).filter(validDrop);
+          items.forEach((item, i) => {
+            toPage({ type: 'add-dropped', item, list: listOf(message), index: start === undefined ? undefined : start + i });
+          });
+        }
         break;
     }
   }
@@ -937,6 +983,206 @@
     }
   }
 
+  // --- saving the songs as a playlist ---
+
+  // The songs that played in the room become a playlist of this listener's own
+  // YouTube Music: every song that the room server keeps, oldest first, and
+  // the song that plays, each once. page.js makes the playlist, and the popup
+  // that asked hears how it went.
+  const playlists = new Map(); // our request ID -> { reply, title }
+  let playlistSeq = 0;
+
+  async function savePlaylist(port, message) {
+    const reply = (fields) => {
+      try {
+        port.postMessage({ type: 'playlist-result', reqId: message.reqId, ...fields });
+      } catch {
+        // The popup was closed.
+      }
+    };
+    if (!conn || status !== 'connected' || !conn.sessionId || !pageReady || !room) {
+      reply({ error: 'failed' });
+      return;
+    }
+    const c = conn;
+    let history;
+    try {
+      const response = await request(c.server, `/api/rooms/${c.roomId}/history`, { sessionId: c.sessionId });
+      ({ history } = await response.json());
+    } catch {
+      // A server before this request has only the songs that the room sends.
+      history = room.history;
+    }
+    const songs = [...(Array.isArray(history) ? history : []), ...(room.current ? [room.current] : [])];
+    const videoIds = [...new Set(songs.map((item) => item.videoId))];
+    if (videoIds.length === 0) {
+      reply({ error: 'nothing' });
+      return;
+    }
+    const id = ++playlistSeq;
+    const title = String(message.title || 'Music Together').slice(0, 150);
+    playlists.set(id, { reply, title });
+    toPage({ type: 'create-playlist', reqId: id, title, description: String(message.description || ''), videoIds });
+  }
+
+  function finishPlaylist(message) {
+    const entry = playlists.get(message.reqId);
+    if (!entry) return;
+    playlists.delete(message.reqId);
+    entry.reply(message.playlistId ? { playlistId: message.playlistId, title: entry.title } : { error: 'failed' });
+  }
+
+  // --- the window on top ---
+
+  // A button in the top bar of YouTube Music opens Music Together in a window
+  // that stays on top of the others: Chrome's picture-in-picture window, which
+  // only a click in the page can open. The window shows the popup's page for
+  // this tab, and closes with the tab. YouTube Music installed as an app, in a
+  // window of its own, has no button: there, the extension's button in the
+  // title bar opens the mini window.
+  const PIP_BUTTON_ID = 'musictogether-pip-button';
+  const PIP_WIDTH = 360;
+  const PIP_HEIGHT = 640;
+  const PIP_LABELS = {
+    ja: 'Music Together を手前の窓で開く',
+    en: 'Open Music Together in a window on top',
+  };
+  const PIP_STYLE = `
+    #${PIP_BUTTON_ID} {
+      display: inline-grid;
+      flex: none;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      margin: 0 4px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: #ffffff;
+      cursor: pointer;
+    }
+    #${PIP_BUTTON_ID}:hover,
+    #${PIP_BUTTON_ID}:focus-visible {
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+    }
+    #${PIP_BUTTON_ID} svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+  `;
+
+  function labelPipButton(language) {
+    const button = document.getElementById(PIP_BUTTON_ID);
+    const label = PIP_LABELS[language] || PIP_LABELS.en;
+    if (button) {
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }
+  }
+
+  // Two beamed eighth notes, the mark of the extension.
+  function noteIcon() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const shapes = [
+      ['path', { d: 'M9 5.2 19 3.2v3L9 8.2z' }],
+      ['rect', { x: '9', y: '7', width: '1.6', height: '10' }],
+      ['rect', { x: '17.4', y: '5', width: '1.6', height: '10' }],
+      ['ellipse', { cx: '7.9', cy: '17.4', rx: '2.9', ry: '2.2', transform: 'rotate(-20 7.9 17.4)' }],
+      ['ellipse', { cx: '16.3', cy: '15.4', rx: '2.9', ry: '2.2', transform: 'rotate(-20 16.3 15.4)' }],
+    ];
+    for (const [name, attributes] of shapes) {
+      const shape = document.createElementNS(ns, name);
+      for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, value);
+      svg.append(shape);
+    }
+    return svg;
+  }
+
+  // The button sits before the cast button, at the right of the top bar.
+  // YouTube Music builds the bar after this script starts, and may build it
+  // again, so the bar is watched.
+  function placePipButton() {
+    const right = document.querySelector('ytmusic-nav-bar #right-content');
+    if (!right) return false;
+    let button = document.getElementById(PIP_BUTTON_ID);
+    if (button && button.parentElement === right) return true;
+    if (!button) {
+      button = document.createElement('button');
+      button.id = PIP_BUTTON_ID;
+      button.type = 'button';
+      button.append(noteIcon());
+      button.addEventListener('click', togglePip);
+    }
+    const cast = right.querySelector('ytmusic-cast-button');
+    right.insertBefore(button, cast || right.firstChild);
+    sendLanguage();
+    return true;
+  }
+
+  function watchTopBar() {
+    if (!('documentPictureInPicture' in window)) return;
+    const style = document.createElement('style');
+    style.textContent = PIP_STYLE;
+    document.head.append(style);
+    const timer = setInterval(() => {
+      if (!placePipButton()) return;
+      clearInterval(timer);
+      new MutationObserver(() => placePipButton()).observe(document.querySelector('ytmusic-nav-bar'), { childList: true, subtree: true });
+    }, 500);
+  }
+
+  // A second click closes the window. The window opens at once, while the
+  // click still allows it, and gets the popup's page once the tab's ID is known.
+  async function togglePip() {
+    if (documentPictureInPicture.window) {
+      documentPictureInPicture.window.close();
+      return;
+    }
+    let pip;
+    try {
+      pip = await documentPictureInPicture.requestWindow({ width: PIP_WIDTH, height: PIP_HEIGHT });
+    } catch {
+      return;
+    }
+    let tabId;
+    try {
+      ({ tabId } = await chrome.runtime.sendMessage({ type: 'which-tab' }));
+    } catch {
+      pip.close();
+      return;
+    }
+    const doc = pip.document;
+    doc.title = 'Music Together';
+    const style = doc.createElement('style');
+    style.textContent = 'html, body { height: 100%; margin: 0; background: #f6f7f5; } iframe { display: block; width: 100%; height: 100%; border: 0; }';
+    const frame = doc.createElement('iframe');
+    frame.src = `${chrome.runtime.getURL('popup/popup.html')}?pip=1&tab=${tabId}`;
+    frame.allow = 'clipboard-write';
+    doc.head.append(style);
+    doc.body.append(frame);
+  }
+
+  // --- dropped songs ---
+
+  // The popup passes what was dropped on it: songs by their IDs, playlists by
+  // theirs, and albums by the IDs of their pages, which the page script turns
+  // into their lists of songs.
+  const MAX_DROPPED = 20;
+
+  function validDrop(item) {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.videoId === 'string') return /^[A-Za-z0-9_-]{11}$/.test(item.videoId);
+    if (typeof item.playlistId === 'string') return /^[A-Za-z0-9_-]{2,64}$/.test(item.playlistId);
+    if (typeof item.browseId === 'string') return /^MPREb_[A-Za-z0-9_-]+$/.test(item.browseId);
+    return false;
+  }
+
   // --- invite links ---
 
   // An invite link opens YouTube Music with the room's ID in the address, as in
@@ -955,6 +1201,9 @@
   // --- start ---
 
   toPage({ type: 'hello' });
+  // An app's window shows the page in another display mode than the browser's.
+  if (matchMedia('(display-mode: browser)').matches) watchTopBar();
+  else callChrome(() => chrome.runtime.sendMessage({ type: 'app-window' }));
 
   // A tab opened from an invite link joins that room under the name and with the
   // server of the settings. Without them, the popup's lobby shows the room until

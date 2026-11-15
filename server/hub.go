@@ -106,6 +106,7 @@ type roomView struct {
 	ParticipantControl bool     `json:"participantControl"`
 	Current            *Item    `json:"current"`
 	Queue              []Item   `json:"queue"`
+	Standby            []Item   `json:"standby"`
 	History            []Item   `json:"history"`
 	Playback           Playback `json:"playback"`
 	Members            []member `json:"members"`
@@ -124,9 +125,12 @@ func NewHub(store *Store, log *slog.Logger, states []State) *Hub {
 		if st.Queue == nil {
 			st.Queue = []Item{}
 		}
-		// Rooms saved before the history was kept have none.
+		// Rooms saved before the history or the standby queue was kept have none.
 		if st.History == nil {
 			st.History = []Item{}
+		}
+		if st.Standby == nil {
+			st.Standby = []Item{}
 		}
 		room := &Room{state: st, sessions: make(map[*Session]struct{})}
 		// Nobody is connected yet: give listeners the usual grace to reconnect
@@ -158,7 +162,7 @@ func (h *Hub) CreateRoom(addr, clientID string, log *slog.Logger) (string, error
 	}
 	ms := now.UnixMilli()
 	// A new room lets participants seek, skip and reorder; the host can turn it off.
-	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), ParticipantControl: true, Queue: []Item{}, History: []Item{}}
+	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), ParticipantControl: true, Queue: []Item{}, Standby: []Item{}, History: []Item{}}
 	if err := h.store.Save(st); err != nil {
 		return "", fmt.Errorf("save new room: %w", err)
 	}
@@ -283,10 +287,10 @@ func (h *Hub) Command(roomID, sessionID string, c Command) error {
 	return nil
 }
 
-// AddTracks adds the songs of an album or a playlist for one member, as many
-// as the queue has room for, and sends the new state to everyone in the room.
-// It reports how many songs it added.
-func (h *Hub) AddTracks(roomID, sessionID string, tracks []Track) (int, error) {
+// AddTracks adds the songs of an album or a playlist for one member to the
+// list that listName names, as many as it has room for, and sends the new
+// state to everyone in the room. It reports how many songs it added.
+func (h *Hub) AddTracks(roomID, sessionID string, tracks []Track, listName string, at *int) (int, error) {
 	room := h.room(roomID)
 	if room == nil {
 		return 0, errRoomNotFound
@@ -298,7 +302,7 @@ func (h *Hub) AddTracks(roomID, sessionID string, tracks []Track) (int, error) {
 		return 0, errNotMember
 	}
 	now := h.now()
-	added, err := room.state.AddTracks(tracks, member{ID: sess.MemberID, Name: sess.Name}, now.UnixMilli())
+	added, err := room.state.AddTracks(tracks, listName, at, member{ID: sess.MemberID, Name: sess.Name}, now.UnixMilli())
 	if err != nil {
 		return 0, err
 	}
@@ -501,7 +505,8 @@ func (h *Hub) broadcastLocked(room *Room, now time.Time) {
 		ParticipantControl: room.state.ParticipantControl,
 		Current:            room.state.Current,
 		Queue:              room.state.Queue,
-		History:            room.state.History,
+		Standby:            room.state.Standby,
+		History:            latest(room.state.History, maxHistoryShown),
 		Playback:           room.state.Playback,
 		Members:            membersOf(room.sessions),
 	})
@@ -525,6 +530,26 @@ func (h *Hub) frame(event string, v any) ([]byte, bool) {
 		return nil, false
 	}
 	return []byte("event: " + event + "\ndata: " + string(data) + "\n\n"), true
+}
+
+// latest returns the last n items of a list, or the whole list when it is shorter.
+func latest(items []Item, n int) []Item {
+	return items[max(0, len(items)-n):]
+}
+
+// History returns every song that played in the room that the member is in,
+// oldest first, up to maxHistoryItems.
+func (h *Hub) History(roomID, sessionID string) ([]Item, error) {
+	room := h.room(roomID)
+	if room == nil {
+		return nil, errRoomNotFound
+	}
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	if room.sessionLocked(sessionID) == nil {
+		return nil, errNotMember
+	}
+	return slices.Clone(room.state.History), nil
 }
 
 // membersOf lists the room's members in the order they joined. A browser with

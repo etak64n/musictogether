@@ -16,8 +16,9 @@ const t = translator(language);
 document.documentElement.lang = language;
 localize(document, t);
 
-// What the tab or the room server reports, in words.
-const message = (code) => t(hasString(code) ? code : 'network');
+// What the tab or the room server reports, in words. A notice about added
+// songs carries their number.
+const message = (code, count) => t(hasString(code) ? code : 'network', { count });
 
 // The room server and its token come from the settings. Without them, the
 // popup asks for them in place of creating or joining a room.
@@ -40,8 +41,32 @@ if (update && update.version && update.url) {
 // The same page opens as a mini window under the button or in Chrome's side
 // panel, as the settings say. The side panel fills the width that Chrome gives
 // it, and stays open while the listener moves between tabs.
-const inPanel = display === 'panel';
+// A button in YouTube Music also opens this page in a window on top of the
+// others, for the tab that has the button: ?pip=1&tab=ID. That window is laid
+// out as the side panel is, at its own height. The mini window carries
+// ?mini=1, as it opens in YouTube Music installed as an app whatever the
+// settings choose.
+const pageParameters = new URLSearchParams(location.search);
+const pipTab = pageParameters.has('pip') ? Number(pageParameters.get('tab')) : NaN;
+const inPip = Number.isInteger(pipTab);
+const inPanel = inPip || (!pageParameters.has('mini') && display === 'panel');
 document.documentElement.classList.toggle('panel', inPanel);
+
+// Chrome lets the window on top be made as narrow as 240px, and gives the page
+// no say in it, while the page needs 320px. Narrower than that, the page is
+// scaled down to the width, so that nothing is cut off or out of place; its
+// height still fills the window.
+const MIN_WIDTH = 320;
+function fitWidth() {
+  const scale = Math.min(1, window.innerWidth / MIN_WIDTH);
+  document.documentElement.style.zoom = scale < 1 ? String(scale) : '';
+  if (scale < 1) document.documentElement.style.setProperty('--available', `${window.innerHeight / scale}px`);
+  else document.documentElement.style.removeProperty('--available');
+}
+if (inPip) {
+  fitWidth();
+  window.addEventListener('resize', fitWidth);
+}
 
 // The folded lists share the height that the rest of the popup leaves (popup.css).
 // In the mini window, that height is the room from the popup's top to the bottom
@@ -70,7 +95,7 @@ let localError = '';
 let shownNotice = 0;
 let toastTimer = 0;
 let searchSeq = 0;
-let rendered = { now: '', queue: '', played: '', current: '' };
+let rendered = { now: '', queue: '', standby: '', played: '', current: '' };
 
 function isHost() {
   return Boolean(view && view.room && view.room.hostId === view.memberId);
@@ -85,6 +110,8 @@ function canControl() {
 // The tab in a room comes first; otherwise the YouTube Music tab in front,
 // otherwise the YouTube Music tab used most recently.
 async function findTab() {
+  // The window on top stays with the tab that opened it.
+  if (inPip) return chrome.tabs.get(pipTab).catch(() => null);
   const { roomTab } = await chrome.storage.session.get('roomTab');
   if (roomTab) {
     const tab = await chrome.tabs.get(roomTab.tabId).catch(() => null);
@@ -187,6 +214,8 @@ function onMessage(message) {
     view = message.view;
     unreachable = false;
     render();
+  } else if (message.type === 'playlist-result') {
+    onPlaylistResult(message);
   } else if (message.type === 'search-result') {
     showResults(message);
   }
@@ -207,11 +236,11 @@ function render() {
 
   if (section === 'lobby') renderLobby();
   if (section === 'room') renderRoom();
-  if (section !== 'room') rendered = { now: '', queue: '', played: '', current: '' };
+  if (section !== 'room') rendered = { now: '', queue: '', standby: '', played: '', current: '' };
 
   if (view && view.notice && view.notice.id !== shownNotice) {
     shownNotice = view.notice.id;
-    toast(message(view.notice.code));
+    toast(message(view.notice.code, view.notice.count));
   }
 }
 
@@ -253,6 +282,9 @@ function renderRoom() {
   const playedChanged = renderPlayed(history);
   renderCurrent(room ? room.current : null);
   renderQueue(queue);
+  // A server older than the standby queue sends none.
+  renderStandby(room && room.standby ? room.standby : []);
+  $('save-playlist').hidden = history.length === 0 && !(room && room.current);
   // When another song has finished, the queue scrolls so that the last one that
   // played is at its top, with the song that plays and the songs that wait below
   // it. The rows below must be in place first, or there is nothing to scroll.
@@ -368,17 +400,17 @@ function renderNow(room) {
   showAddedBy($('now-by'), item ? item.addedBy : '');
 }
 
-function renderQueue(queue) {
-  // The rows stay as they are while a song is being dragged.
-  if (drag) return;
-  // Members remove the songs they added; the host removes any song.
+// The songs that wait, in Main or in Standby. Members remove the songs they
+// added; the host removes any song. Changing the order needs the same
+// permission as skipping. The rows stay as they are while a song is dragged.
+function renderWaiting(name, items) {
+  if (drag) return false;
   const removable = (item) => isHost() || item.addedById === view.memberId;
-  // Changing the order needs the same permission as skipping.
   const movable = canControl();
-  const key = JSON.stringify([movable, queue.map((item) => [item.id, removable(item)])]);
-  if (key === rendered.queue) return;
-  rendered.queue = key;
-  $('queue').replaceChildren(...queue.map((item) => {
+  const key = JSON.stringify([movable, items.map((item) => [item.id, removable(item)])]);
+  if (key === rendered[name]) return false;
+  rendered[name] = key;
+  $(name).replaceChildren(...items.map((item) => {
     let action = emptyAction();
     if (removable(item)) {
       action = iconButton('icon-remove', t('remove'));
@@ -390,14 +422,54 @@ function renderQueue(queue) {
     li.classList.toggle('movable', movable);
     return li;
   }));
+  return true;
 }
+
+function renderQueue(queue) {
+  renderWaiting('queue', queue);
+}
+
+// Standby, the songs that play once Main is empty, sits folded below Main with
+// the number of its songs, and opens with a click on its heading.
+function renderStandby(standby) {
+  $('standby-count').textContent = standby.length === 1 ? t('standbyCountOne') : t('standbyCount', { count: standby.length });
+  renderWaiting('standby', standby);
+}
+
+let standbyOpen = false;
+try {
+  standbyOpen = localStorage.getItem('standbyFold') === 'open';
+} catch {
+  // Standby starts folded.
+}
+
+function applyStandbyFold() {
+  $('standby').hidden = !standbyOpen;
+  $('standby-head').setAttribute('aria-expanded', String(standbyOpen));
+  const label = t(standbyOpen ? 'foldList' : 'expandList');
+  $('standby-head').title = label;
+}
+
+$('standby-head').addEventListener('click', () => {
+  standbyOpen = !standbyOpen;
+  applyStandbyFold();
+  try {
+    localStorage.setItem('standbyFold', standbyOpen ? 'open' : 'folded');
+  } catch {
+    // Remembering it is only a convenience.
+  }
+});
+applyStandbyFold();
 
 // --- reordering the queue ---
 
-// A song in Up next is dragged up or down: the row follows the pointer, the
-// others slide aside to make room, and the room gets the new order when the
-// row is let go. This uses pointer events rather than the browser's drag and
-// drop, so that the row itself moves instead of a faded copy of it.
+// A waiting song is dragged up or down: within Main, within Standby, or from
+// one to the other across the heading of Standby. The row follows the
+// pointer, the others slide aside to make room, and the room gets the new
+// place when the row is let go: in the list on its side of the heading. Over a
+// folded Standby, the song goes to the end of Standby. This uses pointer
+// events rather than the browser's drag and drop, so that the row itself moves
+// instead of a faded copy of it.
 const DRAG_THRESHOLD = 4; // px the pointer moves before a press becomes a drag
 const DRAG_EDGE = 24; // px from the list's top or bottom where the list scrolls
 const DRAG_SCROLL = 6; // px the list scrolls per frame there
@@ -405,20 +477,28 @@ const SETTLE_MS = 150;
 
 let drag = null; // { li, pointerId, startY, y, active, rows, from, to, tops, heights, origin, frame }
 
+// The rows that a dragged song moves among: Main's songs, the heading of
+// Standby, and Standby's songs while it is open.
+function dragRows() {
+  const rows = [...$('queue').children, $('standby-head')];
+  if (!$('standby').hidden) rows.push(...$('standby').children);
+  return rows;
+}
+
 function startDrag() {
-  const list = $('queue');
-  const rows = [...list.children];
-  const listTop = list.getBoundingClientRect().top;
+  const scroller = $('queue-scroll');
+  const rows = dragRows();
+  const top = scroller.getBoundingClientRect().top;
   drag.active = true;
   drag.rows = rows;
   drag.from = rows.indexOf(drag.li);
   drag.to = drag.from;
-  // Positions within the list's content, which scrolling the list does not change.
-  drag.tops = rows.map((row) => row.getBoundingClientRect().top - listTop + list.scrollTop);
+  // Positions within the content, which scrolling does not change.
+  drag.tops = rows.map((row) => row.getBoundingClientRect().top - top + scroller.scrollTop);
   drag.heights = rows.map((row) => row.offsetHeight);
-  drag.origin = drag.startY - listTop + list.scrollTop;
+  drag.origin = drag.startY - top + scroller.scrollTop;
   stopMarquee(drag.li);
-  list.classList.add('sorting');
+  scroller.classList.add('sorting');
   drag.li.classList.add('dragging');
   drag.frame = requestAnimationFrame(dragFrame);
 }
@@ -434,11 +514,11 @@ function dragFrame() {
 }
 
 function layoutDrag() {
-  const list = $('queue');
+  const scroller = $('queue-scroll');
   const { rows, from, tops, heights } = drag;
   const last = rows.length - 1;
-  const y = drag.y - list.getBoundingClientRect().top + list.scrollTop;
-  // The row stays within the list, so that it cannot make the list scroll further.
+  const y = drag.y - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  // The row stays within the rows, so that it cannot make the list scroll further.
   const shift = Math.min(Math.max(y - drag.origin, tops[0] - tops[from]), tops[last] + heights[last] - tops[from] - heights[from]);
   // A row gives way once the dragged row's edge passes its middle, so the
   // first and last places can be reached with the row held inside the list.
@@ -463,63 +543,80 @@ function finishDrag(drop) {
   const d = drag;
   drag = null;
   if (!d.active) {
-    if (view && view.room) renderQueue(view.room.queue);
+    if (view && view.room) renderLists();
     return;
   }
   cancelAnimationFrame(d.frame);
   const itemId = d.li.dataset.itemId;
   const droppedTop = d.li.getBoundingClientRect().top;
-  // The song lands before the rows below the drop point. They are found by ID,
-  // in case the queue changed during the drag: when the first of them has left
-  // the queue, for example because it started playing, the next one counts.
-  const below = d.rows.slice(d.to < d.from ? d.to : d.to + 1).filter((row) => row !== d.li).map((row) => row.dataset.itemId);
-  $('queue').classList.remove('sorting');
+  // The new order of the rows decides the list: the side of Standby's heading
+  // that the song lands on. The song lands before the rows below it in that
+  // list. They are found by ID, in case the lists changed during the drag:
+  // when the first of them has left, for example because it started playing,
+  // the next one counts.
+  const head = $('standby-head');
+  const order = d.rows.filter((row) => row !== d.li);
+  order.splice(d.to, 0, d.li);
+  const headAt = order.indexOf(head);
+  const list = order.indexOf(d.li) < headAt ? 'queue' : 'standby';
+  const rows = list === 'queue' ? order.slice(0, headAt) : order.slice(headAt + 1);
+  const below = rows.slice(rows.indexOf(d.li) + 1).map((row) => row.dataset.itemId);
+  $('queue-scroll').classList.remove('sorting');
   d.li.classList.remove('dragging');
   for (const row of d.rows) row.style.transform = '';
   if (!view || !view.room) return;
-  if (drop && d.to !== d.from) moveSong(itemId, below);
-  renderQueue(view.room.queue);
+  if (drop && d.to !== d.from) moveSong(itemId, below, list);
+  renderLists();
   settle(itemId, droppedTop);
 }
 
-// The song goes before the first of the given songs still in the queue, or
-// last when none of them is.
-function moveSong(itemId, beforeIds) {
-  const queue = view.room.queue;
-  const item = queue.find((it) => it.id === itemId);
+function renderLists() {
+  rendered.queue = '';
+  rendered.standby = '';
+  renderQueue(view.room.queue);
+  renderStandby(view.room.standby || []);
+}
+
+// The song goes into the list, before the first of the given songs still in
+// it, or last when none of them is.
+function moveSong(itemId, beforeIds, list) {
+  const room = view.room;
+  room.standby = room.standby || [];
+  const fromName = room.queue.some((it) => it.id === itemId) ? 'queue' : 'standby';
+  const item = room[fromName].find((it) => it.id === itemId);
   if (!item) return;
-  const rest = queue.filter((it) => it !== item);
+  room[fromName] = room[fromName].filter((it) => it !== item);
+  const rest = room[list];
   const found = rest.findIndex((it) => beforeIds.includes(it.id));
   const index = found < 0 ? rest.length : found;
   rest.splice(index, 0, item);
-  view.room.queue = rest;
-  post({ type: 'move', itemId, index });
+  post({ type: 'move', itemId, index, list });
 }
 
 // The dropped row glides from where it was let go into its place.
 function settle(itemId, fromTop) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const li = [...$('queue').children].find((row) => row.dataset.itemId === itemId);
+  const li = [...$('queue').children, ...$('standby').children].find((row) => row.dataset.itemId === itemId);
   if (!li) return;
   const offset = fromTop - li.getBoundingClientRect().top;
   if (Math.abs(offset) < 1) return;
   li.animate([{ transform: `translateY(${offset}px)` }, { transform: 'none' }], { duration: SETTLE_MS, easing: 'ease-out' });
 }
 
-$('queue').addEventListener('pointerdown', (event) => {
+$('queue-scroll').addEventListener('pointerdown', (event) => {
   const li = event.target.closest('li.movable');
   if (!li || drag || event.button !== 0 || event.target.closest('button')) return;
   drag = { li, pointerId: event.pointerId, startY: event.clientY, y: event.clientY, active: false };
-  $('queue').setPointerCapture(event.pointerId);
+  $('queue-scroll').setPointerCapture(event.pointerId);
 });
 
-$('queue').addEventListener('pointermove', (event) => {
+$('queue-scroll').addEventListener('pointermove', (event) => {
   if (!drag || event.pointerId !== drag.pointerId) return;
   drag.y = event.clientY;
   if (!drag.active && Math.abs(drag.y - drag.startY) >= DRAG_THRESHOLD) startDrag();
 });
 
-$('queue').addEventListener('pointerup', (event) => {
+$('queue-scroll').addEventListener('pointerup', (event) => {
   if (!drag || event.pointerId !== drag.pointerId) return;
   drag.y = event.clientY;
   if (drag.active) layoutDrag();
@@ -527,7 +624,7 @@ $('queue').addEventListener('pointerup', (event) => {
 });
 
 for (const type of ['pointercancel', 'lostpointercapture']) {
-  $('queue').addEventListener(type, (event) => {
+  $('queue-scroll').addEventListener(type, (event) => {
     if (drag && event.pointerId === drag.pointerId) finishDrag(false);
   });
 }
@@ -731,14 +828,31 @@ function iconButton(id, label) {
   return button;
 }
 
-function toast(text) {
+// A short message at the bottom of the popup. One with an action, such as
+// opening a playlist, stays longer, so that there is time to click it.
+const TOAST_ACTION_MS = 8000;
+
+function toast(text, action) {
   const box = $('toast');
-  box.textContent = text;
+  const words = document.createElement('span');
+  words.textContent = text;
+  box.replaceChildren(words);
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-action';
+    button.textContent = action.label;
+    button.addEventListener('click', () => {
+      box.hidden = true;
+      action.run();
+    });
+    box.append(button);
+  }
   box.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     box.hidden = true;
-  }, TOAST_MS);
+  }, action ? TOAST_ACTION_MS : TOAST_MS);
 }
 
 // --- search ---
@@ -770,15 +884,18 @@ function showResults(message) {
   $('results').hidden = false;
   $('results').replaceChildren(...message.results.map((track) => {
     const subtitle = [track.artists, formatDuration(track.duration)].filter(Boolean).join(' • ');
-    return songRow(track, subtitle, addButton(track, 'add'));
+    const actions = document.createElement('span');
+    actions.className = 'row-actions';
+    actions.append(addButton(track, 'addStandby', 'standby', 'icon-standby'), addButton(track, 'add'));
+    return songRow(track, subtitle, actions);
   }));
 }
 
-// A button that adds a song to the queue, and then shows that it did.
-function addButton(track, label) {
-  const button = iconButton('icon-add', t(label));
+// A button that adds a song to Main, or to Standby, and then shows that it did.
+function addButton(track, label, list = 'queue', iconId = 'icon-add') {
+  const button = iconButton(iconId, t(label));
   button.addEventListener('click', () => {
-    post({ type: 'add', track });
+    post({ type: 'add', track, list });
     button.replaceChildren(icon('icon-check'));
     button.disabled = true;
     button.setAttribute('aria-label', t('added'));
@@ -873,6 +990,160 @@ $('join-form').addEventListener('submit', (event) => {
   post({ type: 'join', roomId, name });
   renderLobby();
 });
+
+// --- dropping songs ---
+
+// A song, an album, or a playlist dragged from YouTube Music onto the room
+// goes to the end of the queue. This works in the side panel and in the window
+// on top; the mini window closes as soon as the page is touched. A link that
+// is dropped anywhere else does nothing, rather than open in this page.
+function droppedItems(transfer) {
+  const text = transfer.getData('text/uri-list') || transfer.getData('text/plain') || '';
+  const items = [];
+  for (const line of text.split(/\r?\n/)) {
+    const value = line.trim();
+    if (!value || value.startsWith('#')) continue;
+    let url;
+    try {
+      url = new URL(value);
+    } catch {
+      continue;
+    }
+    const host = url.hostname.replace(/^(www|m)\./, '');
+    if (host === 'youtu.be') {
+      items.push({ videoId: url.pathname.slice(1) });
+    } else if (host === 'music.youtube.com' || host === 'youtube.com') {
+      const album = url.pathname.match(/^\/browse\/(MPREb_[\w-]+)$/);
+      if (url.pathname === '/watch' && url.searchParams.get('v')) items.push({ videoId: url.searchParams.get('v') });
+      else if (url.pathname === '/playlist' && url.searchParams.get('list')) items.push({ playlistId: url.searchParams.get('list') });
+      else if (album) items.push({ browseId: album[1] });
+    }
+  }
+  return items;
+}
+
+const carriesLinks = (event) => [...event.dataTransfer.types].some((type) => type === 'text/uri-list' || type === 'text/plain');
+const dropOpen = () => Boolean(view && view.status === 'connected' && !settingsOpen && !$('room').hidden);
+let dragDepth = 0;
+
+document.addEventListener('dragover', (event) => event.preventDefault());
+document.addEventListener('drop', (event) => event.preventDefault());
+
+// A song dropped among the songs of the queue goes to that place: before the
+// row under the upper half of the pointer, after it under the lower half. The
+// songs are Main's, then the heading of Standby, then Standby's while it is
+// open; over the songs that played, the song goes first in Main. A line shows
+// the place. Dropped on the heading of a folded Standby, the song takes a
+// random place in Standby; dropped anywhere else in the room, it goes to the
+// end of Main.
+function dropPlace(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || !target.closest('#queue-scroll')) return { list: 'queue' };
+  const y = event.clientY;
+  const open = !$('standby').hidden;
+  const head = $('standby-head').getBoundingClientRect();
+  const placeAmong = (rows) => {
+    const index = rows.findIndex((row) => y < row.getBoundingClientRect().top + row.offsetHeight / 2);
+    return index < 0 ? rows.length : index;
+  };
+  if (y >= head.top) {
+    if (!open) return { list: 'standby' };
+    return { list: 'standby', index: y < head.bottom ? 0 : placeAmong([...$('standby').children]) };
+  }
+  return { list: 'queue', index: placeAmong([...$('queue').children]) };
+}
+
+// The line sits between the rows where the song will go.
+function showDropLine(place) {
+  const line = $('drop-line');
+  if (!place || place.index === undefined) {
+    line.hidden = true;
+    return;
+  }
+  const rows = [...$(place.list).children];
+  let top;
+  if (place.index < rows.length) top = rows[place.index].offsetTop;
+  else if (rows.length > 0) top = rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight;
+  else top = place.list === 'standby' ? $('standby-head').offsetTop + $('standby-head').offsetHeight : $('queue').offsetTop;
+  line.style.top = `${top - 1}px`;
+  line.hidden = false;
+}
+
+function markDrop(place) {
+  $('queue-panel').classList.toggle('drop-target', Boolean(place) && place.list === 'queue');
+  $('standby-section').classList.toggle('drop-target', Boolean(place) && place.list === 'standby' && place.index === undefined);
+  showDropLine(place);
+}
+
+// Near the top or bottom of the queue, the queue scrolls under the song.
+function scrollForDrop(event) {
+  const scroller = $('queue-scroll');
+  const box = scroller.getBoundingClientRect();
+  if (event.clientX < box.left || event.clientX > box.right) return;
+  if (event.clientY < box.top + DRAG_EDGE && event.clientY >= box.top) scroller.scrollTop -= DRAG_SCROLL;
+  else if (event.clientY > box.bottom - DRAG_EDGE && event.clientY <= box.bottom) scroller.scrollTop += DRAG_SCROLL;
+}
+
+$('room').addEventListener('dragenter', (event) => {
+  if (!carriesLinks(event) || !dropOpen()) return;
+  dragDepth += 1;
+  markDrop(dropPlace(event));
+});
+
+$('room').addEventListener('dragover', (event) => {
+  if (!carriesLinks(event) || !dropOpen()) return;
+  event.dataTransfer.dropEffect = 'copy';
+  scrollForDrop(event);
+  markDrop(dropPlace(event));
+});
+
+$('room').addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) markDrop(null);
+});
+
+$('room').addEventListener('drop', (event) => {
+  dragDepth = 0;
+  const place = dropPlace(event);
+  markDrop(null);
+  if (!dropOpen()) return;
+  const items = droppedItems(event.dataTransfer);
+  if (items.length === 0) {
+    toast(t('drop_nothing'));
+    return;
+  }
+  post({ type: 'drop', items, list: place.list, ...(place.index === undefined ? {} : { index: place.index }) });
+});
+
+// --- saving the songs as a playlist ---
+
+// The songs that played in the room become a private playlist of this
+// listener's YouTube Music, named after the moment it is made.
+let playlistSeq = 0;
+
+function stamp(date) {
+  const two = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}/${two(date.getMonth() + 1)}/${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
+}
+
+$('save-playlist').addEventListener('click', () => {
+  playlistSeq += 1;
+  $('save-playlist').disabled = true;
+  post({ type: 'save-playlist', reqId: playlistSeq, title: t('playlistTitle', { date: stamp(new Date()) }), description: t('playlistDescription') });
+});
+
+function onPlaylistResult(message) {
+  if (message.reqId !== playlistSeq) return;
+  $('save-playlist').disabled = false;
+  if (message.error) {
+    toast(t(message.error === 'nothing' ? 'playlistNothing' : 'playlistFailed'));
+    return;
+  }
+  toast(t('playlistSaved', { title: message.title }), {
+    label: t('openPlaylist'),
+    run: () => chrome.tabs.create({ url: `${YTM_URL}playlist?list=${encodeURIComponent(message.playlistId)}` }),
+  });
+}
 
 // --- folding the queue ---
 
@@ -1038,7 +1309,7 @@ $('language').addEventListener('change', async () => {
 // The service worker applies the way the button opens, from the next click of
 // the button. Leaving the side panel closes it at once.
 for (const radio of document.querySelectorAll('input[name="display"]')) {
-  radio.checked = radio.value === (inPanel ? 'panel' : 'window');
+  radio.checked = radio.value === (display === 'panel' ? 'panel' : 'window');
   radio.addEventListener('change', () => {
     if (radio.checked) chrome.storage.local.set({ display: radio.value === 'panel' ? 'panel' : 'window' });
   });

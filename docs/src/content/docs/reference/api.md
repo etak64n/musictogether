@@ -15,6 +15,7 @@ The bodies of requests and responses are JSON, except where an endpoint says oth
 | [`POST /api/rooms`](#create-a-room) | Create a room |
 | [`POST /api/rooms/{id}/stream`](#join-a-room) | Join a room, and receive its changes as events |
 | [`POST /api/rooms/{id}/commands`](#change-a-room) | Change a room |
+| [`POST /api/rooms/{id}/history`](#songs-that-played) | Every song that played in a room |
 
 ## Token
 
@@ -136,8 +137,9 @@ The data of `room`:
 | `hostId` | string | The `memberId` of the host. |
 | `participantControl` | boolean | Whether participants may seek, skip, and reorder the queue. True in a new room. |
 | `current` | item or null | The song that plays. `null` while nothing plays, and the queue is then empty. |
-| `queue` | array of items | The songs after `current`, in the order they play. |
-| `history` | array of items | The songs that played, oldest first: the last 50 that the room moved past with `next` or `ended`. |
+| `queue` | array of items | The main queue: the songs after `current`, in the order they play. |
+| `standby` | array of items | The standby queue: the songs that play once `queue` is empty, in the order they play. |
+| `history` | array of items | The songs that played, oldest first: the last 50 that the room moved past with `next` or `ended`. [Songs that played](#songs-that-played) gives up to 500. |
 | `playback` | playback | The shared timeline of the room. |
 | `members` | array of members | The members connected to the room, in the order they joined. |
 
@@ -184,8 +186,9 @@ When the command changes the room, every member receives the changed room as a `
 | `type` | string | Yes | The command, one of the types in the table of commands. |
 | `track` | track | For `add` | The song to add. |
 | `tracks` | array of tracks | For `addTracks` | The songs to add, in order: from 1 to 200. |
+| `list` | string | No | For `add`, `addTracks`, and `move`: the list that takes the songs, `queue` or `standby`. `add` and `addTracks` take `queue` without it, and `move` keeps the item in its own list. |
 | `itemId` | string | For `remove`, `move`, `next`, and `ended` | The `id` of an item. |
-| `index` | number | For `move` | The new place of the item in the queue, from 0. |
+| `index` | number | For `move` | The place of the songs in the list, from 0. For `move`, the new place of the item. For `add` and `addTracks`, the place of the first song; without it, the songs go to the end of `queue`, or each to a random place in `standby`. |
 | `position` | number | For `seek` | The new position in seconds. |
 | `value` | boolean | For `listening` and `participantControl` | The new value. |
 
@@ -207,10 +210,10 @@ The commands:
 
 | `type` | Who | Effect |
 | --- | --- | --- |
-| `add` | Everyone | Adds `track` to the end of the queue. In a room where nothing plays, the song starts at once. |
-| `addTracks` | Everyone | Adds `tracks` to the end of the queue in their order, as many as the queue has room for. In a room where nothing plays, the first song starts at once. One invalid track adds none of them (`bad_request`), and a full queue adds none (`queue_full`). |
-| `remove` | The host, and the member who added the item | Removes the item from the queue. |
-| `move` | The host, and participants with the permission | Takes the item out of the queue and puts it back at `index`. 0 plays it next, and an index past the end puts it last. |
+| `add` | Everyone | Adds `track` to `list` at `index`. In a room where nothing plays, the song starts at once. |
+| `addTracks` | Everyone | Adds `tracks` to `list` in their order from `index`, as many as the list has room for. Without `index`, each song of `standby` takes a random place. In a room where nothing plays, the first song starts at once. One invalid track adds none of them (`bad_request`), and a full list adds none (`queue_full`). |
+| `remove` | The host, and the member who added the item | Removes the item from `queue` or `standby`. |
+| `move` | The host, and participants with the permission | Takes the item out of its list and puts it at `index` in `list`. 0 puts it first, and an index past the end puts it last. |
 | `seek` | The host, and participants with the permission | Moves the timeline to `position`. A position past the end of the song is the end. |
 | `next` | The host, and participants with the permission | Skips `current`, when `itemId` is still `current`. The skipped song goes to the end of `history`. |
 | `ended` | Everyone | Moves on from `current` when `itemId` is still `current` and the timeline is within 5 seconds of its end, or at once when its `duration` is 0. The song goes to the end of `history`. |
@@ -219,6 +222,7 @@ The commands:
 | `close` | The host | Deletes the room. Every member receives `closed`, and every stream ends. The extension sends it 5 seconds after the host clicks End room, unless the host clicks Undo. |
 
 `next` and `ended` name the item to move past, so that several members who reach the end of the same song at once move the room on only once.
+The room then plays the first song of `queue`, and the first song of `standby` once `queue` is empty.
 
 A track describes a song as YouTube Music shows it:
 
@@ -230,3 +234,19 @@ A track describes a song as YouTube Music shows it:
 | `album` | string | No | The album. The server keeps the first 200 characters. |
 | `duration` | number | No | The length in seconds, up to 86,400. Other values become 0. |
 | `thumbnail` | string | No | An HTTPS URL of the artwork on a host that ends with `.googleusercontent.com`, `.ggpht.com`, or `.ytimg.com`. Other values become an empty string, so that a member cannot make the others load images from another server. |
+
+## Songs that played
+
+`POST /api/rooms/{id}/history` answers a member of the room `{id}` with every song that the room keeps from those that played: up to 500, oldest first. The `room` event carries only the last 50 of them.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sessionId` | string | Yes | The `sessionId` of an open stream to the room. |
+
+The response has the status 200, and `history`, an array of items.
+
+```json
+{"history": [{"id": "1", "videoId": "abcdefghijk", "title": "...", "artists": "...", "album": "", "duration": 213, "thumbnail": "...", "addedBy": "...", "addedById": "..."}]}
+```
+
+The errors are `bad_request`, `not_member`, and `room_not_found`.

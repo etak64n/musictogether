@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"math/rand/v2"
 	"net/url"
 	"regexp"
 	"slices"
@@ -12,8 +13,11 @@ import (
 
 // Limits that keep a room small enough to send whole on every change.
 const (
-	maxQueueItems   = 200
-	maxHistoryItems = 50
+	maxQueueItems = 200
+	// A room keeps this many songs that played, which members fetch to save
+	// them as a playlist, and sends the latest maxHistoryShown with the room.
+	maxHistoryItems = 500
+	maxHistoryShown = 50
 	maxTextRunes    = 200
 	maxNameRunes    = 30
 	maxDuration     = 24 * 60 * 60
@@ -72,6 +76,9 @@ type State struct {
 	ParticipantControl bool   `json:"participantControl"`
 	Current            *Item  `json:"current"`
 	Queue              []Item `json:"queue"`
+	// Standby is the songs that play once the queue is empty, in their order:
+	// songs that may wait while the requests go first.
+	Standby []Item `json:"standby"`
 	// History is the songs that played, oldest first, up to maxHistoryItems.
 	History  []Item   `json:"history"`
 	Playback Playback `json:"playback"`
@@ -79,9 +86,12 @@ type State struct {
 
 // Command is one change that a member asks for.
 type Command struct {
-	Type     string   `json:"type"`
-	Track    *Track   `json:"track,omitempty"`
-	Tracks   []Track  `json:"tracks,omitempty"`
+	Type   string  `json:"type"`
+	Track  *Track  `json:"track,omitempty"`
+	Tracks []Track `json:"tracks,omitempty"`
+	// List names the list that add, addTracks, and move put songs in:
+	// "queue", which add and addTracks take without a name, or "standby".
+	List     string   `json:"list,omitempty"`
 	ItemID   string   `json:"itemId,omitempty"`
 	Position *float64 `json:"position,omitempty"`
 	Index    *int     `json:"index,omitempty"`
@@ -108,42 +118,59 @@ func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 
 	switch c.Type {
 	case "add":
-		if c.Track == nil {
+		list, ok := s.list(c.List)
+		if !ok || c.Track == nil || (c.Index != nil && *c.Index < 0) {
 			return false, errBadRequest
 		}
 		track, ok := normalizeTrack(*c.Track)
 		if !ok {
 			return false, errBadRequest
 		}
-		if len(s.Queue) >= maxQueueItems {
+		if len(*list) >= maxQueueItems {
 			return false, errQueueFull
 		}
-		s.addItem(track, by, now)
+		s.addItem(track, list, c.Index, by, now)
 	case "remove":
-		i := slices.IndexFunc(s.Queue, func(it Item) bool { return it.ID == c.ItemID })
+		list, i := s.find(c.ItemID)
 		if i < 0 {
 			return false, nil
 		}
-		if !isHost && s.Queue[i].AddedByID != by.ID {
+		if !isHost && (*list)[i].AddedByID != by.ID {
 			return false, errHostOnly
 		}
-		s.Queue = slices.Delete(s.Queue, i, i+1)
+		*list = slices.Delete(*list, i, i+1)
 	case "move":
-		// The song is taken out of the queue and put back at Index, so 0 plays
-		// it next and an index past the end puts it last.
+		// The song is taken out of its list and put at Index in the list that
+		// the command names, or back in its own list without a name. 0 puts it
+		// first, and an index past the end puts it last.
 		if c.Index == nil || *c.Index < 0 {
 			return false, errBadRequest
 		}
-		i := slices.IndexFunc(s.Queue, func(it Item) bool { return it.ID == c.ItemID })
+		from, i := s.find(c.ItemID)
 		if i < 0 {
 			return false, nil
 		}
-		to := min(*c.Index, len(s.Queue)-1)
-		if to == i {
-			return false, nil
+		to := from
+		if c.List != "" {
+			var ok bool
+			if to, ok = s.list(c.List); !ok {
+				return false, errBadRequest
+			}
 		}
-		item := s.Queue[i]
-		s.Queue = slices.Insert(slices.Delete(s.Queue, i, i+1), to, item)
+		item := (*from)[i]
+		if to == from {
+			at := min(*c.Index, len(*from)-1)
+			if at == i {
+				return false, nil
+			}
+			*from = slices.Insert(slices.Delete(*from, i, i+1), at, item)
+		} else {
+			if len(*to) >= maxQueueItems {
+				return false, errQueueFull
+			}
+			*from = slices.Delete(*from, i, i+1)
+			*to = slices.Insert(*to, min(*c.Index, len(*to)), item)
+		}
 	case "seek":
 		pos, ok := s.clampPosition(c.Position)
 		if !ok {
@@ -184,13 +211,16 @@ func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 	return true, nil
 }
 
-// AddTracks adds the songs of an album or a playlist to the end of the queue,
-// in their order, as many as the queue has room for, and reports how many it
-// added. Anyone in the room can add songs. The songs are all checked first, so
-// that one bad song adds none of them. In a room where nothing plays, the
-// first song starts at once.
-func (s *State) AddTracks(tracks []Track, by member, now int64) (int, error) {
-	if len(tracks) == 0 || len(tracks) > maxQueueItems {
+// AddTracks adds the songs of an album or a playlist to the list that
+// listName names, as many as the list has room for, and reports how many it
+// added. With at, the songs go there in their order; without it, they go to
+// the end of the queue, or to random places in the standby queue. Anyone in
+// the room can add songs. The songs are all checked first, so that one bad
+// song adds none of them. In a room where nothing plays, the first song starts
+// at once.
+func (s *State) AddTracks(tracks []Track, listName string, at *int, by member, now int64) (int, error) {
+	list, ok := s.list(listName)
+	if !ok || len(tracks) == 0 || len(tracks) > maxQueueItems || (at != nil && *at < 0) {
 		return 0, errBadRequest
 	}
 	checked := make([]Track, 0, len(tracks))
@@ -201,12 +231,22 @@ func (s *State) AddTracks(tracks []Track, by member, now int64) (int, error) {
 		}
 		checked = append(checked, track)
 	}
-	added := 0
+	added, placed := 0, 0
 	for _, track := range checked {
-		if len(s.Queue) >= maxQueueItems {
+		if len(*list) >= maxQueueItems {
 			break
 		}
-		s.addItem(track, by, now)
+		// The songs keep their order from the given place on. A song that
+		// starts playing in an idle room takes no place in the list.
+		var place *int
+		if at != nil {
+			next := *at + placed
+			place = &next
+		}
+		if s.Current != nil {
+			placed++
+		}
+		s.addItem(track, list, place, by, now)
 		added++
 	}
 	if added == 0 {
@@ -217,16 +257,49 @@ func (s *State) AddTracks(tracks []Track, by member, now int64) (int, error) {
 	return added, nil
 }
 
-// addItem puts a song at the end of the queue. An idle room starts playing it.
-func (s *State) addItem(track Track, by member, now int64) {
+// standbyPlace picks the place of a song added to the standby queue, among
+// the n+1 places of a list of n songs. Songs take random places, so that a
+// whole album or playlist that one member adds mixes with the others' songs.
+var standbyPlace = func(n int) int { return rand.IntN(n + 1) }
+
+// addItem puts a song at the place that at names, as when a member drops it
+// there, or else at the end of the queue, or at a random place in the standby
+// queue. A place past the end is the end. An idle room starts playing it.
+func (s *State) addItem(track Track, list *[]Item, at *int, by member, now int64) {
 	s.NextItemID++
 	item := Item{ID: strconv.FormatInt(s.NextItemID, 10), Track: track, AddedBy: by.Name, AddedByID: by.ID}
-	if s.Current == nil {
+	switch {
+	case s.Current == nil:
 		s.Current = &item
 		s.Playback = Playback{Playing: true, UpdatedAt: now}
-	} else {
-		s.Queue = append(s.Queue, item)
+	case at != nil:
+		*list = slices.Insert(*list, min(*at, len(*list)), item)
+	case list == &s.Standby:
+		*list = slices.Insert(*list, standbyPlace(len(*list)), item)
+	default:
+		*list = append(*list, item)
 	}
+}
+
+// list returns the list that a command names: the queue without a name.
+func (s *State) list(name string) (*[]Item, bool) {
+	switch name {
+	case "", "queue":
+		return &s.Queue, true
+	case "standby":
+		return &s.Standby, true
+	}
+	return nil, false
+}
+
+// find returns the list that holds an item, and the item's place in it, or -1.
+func (s *State) find(itemID string) (*[]Item, int) {
+	for _, list := range []*[]Item{&s.Queue, &s.Standby} {
+		if i := slices.IndexFunc(*list, func(it Item) bool { return it.ID == itemID }); i >= 0 {
+			return list, i
+		}
+	}
+	return nil, -1
 }
 
 // PositionAt returns where the shared timeline is at the given time.
@@ -272,13 +345,18 @@ func (s *State) advance(now int64) {
 			s.History = slices.Delete(s.History, 0, len(s.History)-maxHistoryItems)
 		}
 	}
-	if len(s.Queue) == 0 {
+	// The queue goes first; the standby queue plays once the queue is empty.
+	list := &s.Queue
+	if len(*list) == 0 {
+		list = &s.Standby
+	}
+	if len(*list) == 0 {
 		s.Current = nil
 		s.Playback = Playback{UpdatedAt: now}
 		return
 	}
-	next := s.Queue[0]
-	s.Queue = slices.Delete(s.Queue, 0, 1)
+	next := (*list)[0]
+	*list = slices.Delete(*list, 0, 1)
 	s.Current = &next
 	s.Playback = Playback{Playing: true, UpdatedAt: now}
 }

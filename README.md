@@ -21,11 +21,12 @@ Each extension computes the position from the timeline, and moves its own player
 ## Features
 
 - **Invite links.** The host copies a link that opens YouTube Music and joins the room.
-- **A shared queue.** Everyone in a room adds songs, from the search of the popup or from the ⋮ menu of a song, an album, or a playlist in YouTube Music. The queue is reordered by dragging, and the songs that have played stay at its top in gray, ready to be added again.
+- **Two shared queues.** Everyone in a room adds songs to Main, which plays first, or to Standby, which plays once Main is empty and mixes the songs that it gets at random places. Songs come from the search of the popup, from the ⋮ menu of a song, an album, or a playlist in YouTube Music, or by dragging one from YouTube Music to a place in the queues. The queues are reordered by dragging, and the songs that have played stay at the top in gray, ready to be added again.
+- **The songs that played, as a playlist.** The songs that played in a room are saved as a private playlist of your YouTube Music with one click.
 - **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now. Everyone sees who is listening.
 - **A host.** The host decides whether participants may skip, seek, and reorder, and ends the room.
 - **Your own server.** One Go program without dependencies keeps the rooms in JSON files, and answers only the people who know its token.
-- **A mini window or a side panel.** The button opens the popup in a small window below it, or in the side panel of Chrome, which stays open while you move between tabs.
+- **A mini window, a side panel, or a window on top.** The button opens the popup in a small window below it, or in the side panel of Chrome, which stays open while you move between tabs. A button in the top bar of YouTube Music opens it in a window that stays on top of the others. In YouTube Music installed as an app, the button opens the mini window.
 - **English and Japanese.** The screens of the extension follow the language of Chrome, and its settings switch them between the two.
 
 ## Quick start

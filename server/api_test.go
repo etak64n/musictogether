@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -249,6 +250,33 @@ func TestAddTracksTellsHowManyWereAdded(t *testing.T) {
 	queue, _ := room.data["queue"].([]any)
 	if current["videoId"] != "aaaaaaaaaaa" || len(queue) != 2 || queue[1].(map[string]any)["videoId"] != "ccccccccccc" {
 		t.Errorf("current = %v, queue = %v; want the 3 songs in their order", current, queue)
+	}
+}
+
+func TestTheRoomSendsTheLatestSongsThatPlayed(t *testing.T) {
+	srv, hub := newTestServer(t)
+	roomID := createRoom(t, srv, "client-neko")
+	room := hub.room(roomID)
+	room.mu.Lock()
+	for i := range maxHistoryShown + 10 {
+		room.state.History = append(room.state.History, Item{ID: fmt.Sprint(i), Track: *testTrack(fmt.Sprintf("song%07d", i))})
+	}
+	room.mu.Unlock()
+
+	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
+	sessionID := next(t, neko).data["sessionId"].(string)
+	sent, _ := next(t, neko).data["history"].([]any)
+	if len(sent) != maxHistoryShown || sent[len(sent)-1].(map[string]any)["id"] != fmt.Sprint(maxHistoryShown+9) {
+		t.Errorf("the room sent %d songs that played; want the latest %d", len(sent), maxHistoryShown)
+	}
+
+	resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/history", map[string]any{"sessionId": sessionID})
+	all, _ := body["history"].([]any)
+	if resp.StatusCode != http.StatusOK || len(all) != maxHistoryShown+10 {
+		t.Errorf("history: status %d, %d songs; want 200 with all %d", resp.StatusCode, len(all), maxHistoryShown+10)
+	}
+	if resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/history", map[string]any{"sessionId": "not-a-session"}); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("history without a session: status %d, body %v; want 403", resp.StatusCode, body)
 	}
 }
 

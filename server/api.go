@@ -57,6 +57,7 @@ func (h *Hub) Handler(token string) http.Handler {
 	mux.HandleFunc("POST /api/rooms", auth(h.handleCreate))
 	mux.HandleFunc("POST /api/rooms/{id}/stream", auth(h.handleStream))
 	mux.HandleFunc("POST /api/rooms/{id}/commands", auth(h.handleCommand))
+	mux.HandleFunc("POST /api/rooms/{id}/history", auth(h.handleHistory))
 	mux.HandleFunc("OPTIONS /api/", h.handlePreflight)
 	return h.withCommon(mux)
 }
@@ -193,7 +194,7 @@ func (h *Hub) handleCommand(w http.ResponseWriter, r *http.Request) {
 		err = h.CloseRoom(r.PathValue("id"), req.SessionID, loggerFrom(r.Context()))
 	case "addTracks":
 		var added int
-		added, err = h.AddTracks(r.PathValue("id"), req.SessionID, req.Tracks)
+		added, err = h.AddTracks(r.PathValue("id"), req.SessionID, req.Tracks, req.List, req.Index)
 		answer["added"] = added
 	default:
 		err = h.Command(r.PathValue("id"), req.SessionID, req.Command)
@@ -203,6 +204,24 @@ func (h *Hub) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, answer)
+}
+
+// handleHistory answers a member with every song that played in the room,
+// oldest first. The room sends only the latest of them with every change.
+func (h *Hub) handleHistory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, errBadRequest)
+		return
+	}
+	history, err := h.History(r.PathValue("id"), req.SessionID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string][]Item{"history": history})
 }
 
 // handlePreflight answers CORS preflight requests. The extension sends JSON

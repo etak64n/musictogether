@@ -60,14 +60,19 @@ The behavior of the extension in YouTube Music depends on the page of YouTube Mu
 ## Releases
 
 1. Set the new version in extension/manifest.json and in server/main.go.
-2. Push the tag `vX.Y.Z`.
+2. Push the annotated tag `vX.Y.Z`. Its message is the notes of the release: one line for each change, starting with `[New]` for what is new and `[Fix]` for what is fixed.
+
+```sh
+git tag -a v1.2.0 -m "- [New] A song dropped among the songs of the queue goes to that place." -m "- [Fix] The seek bar keeps its handle while the song loads."
+git push origin v1.2.0
+```
 
 The Release workflow (.github/workflows/release.yml) takes these steps:
 
 1. It checks that both versions match the tag.
 2. It builds the image of the room server on amd64 and on arm64, each on a runner of its own, and tries each image: the index page, a request without the token, and a request with it.
 3. It publishes the image as `ghcr.io/etak64n/musictogether` with the tags `X.Y.Z`, `X.Y`, and `latest`. A version with a hyphen, such as `1.3.0-rc.1`, gets its own tag only.
-4. It packs extension/ into `musictogether.zip`, and publishes the zip as the release of the tag.
+4. It packs extension/ into `musictogether.zip`, and publishes the zip as the release of the tag, with the tag's message as its notes.
 
 The zip has the same name in every release, so that `https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip` always gives the latest one.
 The folder in the zip is named `musictogether` in every release, so that a member who replaces the folder keeps the settings of the extension.

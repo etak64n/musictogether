@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -320,7 +321,7 @@ func trackList(videoIDs ...string) []Track {
 
 func TestAddTracksKeepsTheirOrder(t *testing.T) {
 	s := newState()
-	added, err := s.AddTracks(trackList("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), guest, 1000)
+	added, err := s.AddTracks(trackList("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), "", nil, guest, 1000)
 	if err != nil || added != 3 {
 		t.Fatalf("AddTracks = %d, %v; want 3 songs added", added, err)
 	}
@@ -348,7 +349,7 @@ func TestAddTracksStopsAtTheLimit(t *testing.T) {
 		add(t, &s, "bbbbbbbbbbb", host, 1000)
 	}
 
-	added, err := s.AddTracks(trackList("ccccccccccc", "ddddddddddd", "eeeeeeeeeee"), guest, 2000)
+	added, err := s.AddTracks(trackList("ccccccccccc", "ddddddddddd", "eeeeeeeeeee"), "", nil, guest, 2000)
 	if err != nil || added != 2 {
 		t.Fatalf("AddTracks = %d, %v; want the 2 songs that fit", added, err)
 	}
@@ -356,7 +357,7 @@ func TestAddTracksStopsAtTheLimit(t *testing.T) {
 		t.Errorf("queue has %d songs ending with %s; want %d ending with the second new song", len(s.Queue), last, maxQueueItems)
 	}
 
-	if _, err := s.AddTracks(trackList("fffffffffff"), guest, 3000); !errors.Is(err, errQueueFull) {
+	if _, err := s.AddTracks(trackList("fffffffffff"), "", nil, guest, 3000); !errors.Is(err, errQueueFull) {
 		t.Errorf("AddTracks to a full queue: err = %v; want queue_full", err)
 	}
 }
@@ -369,12 +370,208 @@ func TestAddTracksChecksEverySong(t *testing.T) {
 	}
 	for name, list := range map[string][]Track{"one bad song": bad, "no songs": nil, "too many songs": tooMany} {
 		s := newState()
-		if _, err := s.AddTracks(list, host, 1000); !errors.Is(err, errBadRequest) {
+		if _, err := s.AddTracks(list, "", nil, host, 1000); !errors.Is(err, errBadRequest) {
 			t.Errorf("%s: err = %v; want bad_request", name, err)
 		}
 		if s.Current != nil || s.Version != 0 {
 			t.Errorf("%s: the room changed: %+v", name, s)
 		}
+	}
+}
+
+// placeStandbyLast puts the songs added to the standby queue last, for tests
+// that check their order, and gives them random places again afterward.
+func placeStandbyLast(t *testing.T) {
+	t.Helper()
+	random := standbyPlace
+	standbyPlace = func(n int) int { return n }
+	t.Cleanup(func() { standbyPlace = random })
+}
+
+func standby(s *State) string {
+	letters := ""
+	for _, it := range s.Standby {
+		letters += it.VideoID[:1]
+	}
+	return letters
+}
+
+func addTo(t *testing.T, s *State, list, videoID string, by member, now int64) {
+	t.Helper()
+	mustApply(t, s, Command{Type: "add", Track: testTrack(videoID), List: list}, by, now)
+}
+
+func TestTheStandbyQueuePlaysOnceTheQueueIsEmpty(t *testing.T) {
+	placeStandbyLast(t)
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	addTo(t, &s, "standby", "xxxxxxxxxxx", guest, 1000)
+	addTo(t, &s, "standby", "yyyyyyyyyyy", guest, 1000)
+	add(t, &s, "bbbbbbbbbbb", host, 1000)
+	if queued(&s) != "b" || standby(&s) != "xy" {
+		t.Fatalf("queue = %q, standby = %q; want \"b\" and \"xy\"", queued(&s), standby(&s))
+	}
+
+	next := func(want string) {
+		t.Helper()
+		mustApply(t, &s, Command{Type: "next", ItemID: s.Current.ID}, host, 2000)
+		if s.Current == nil || s.Current.VideoID[:1] != want {
+			t.Fatalf("Current = %+v; want %s", s.Current, want)
+		}
+	}
+	next("b")
+	next("x")
+	// A request added while a song of the standby queue plays goes first.
+	add(t, &s, "ccccccccccc", host, 3000)
+	next("c")
+	next("y")
+	mustApply(t, &s, Command{Type: "next", ItemID: s.Current.ID}, host, 4000)
+	if s.Current != nil {
+		t.Errorf("Current = %+v; want the room idle once both lists are empty", s.Current)
+	}
+}
+
+func TestAddingToTheStandbyQueueOfAnIdleRoomPlays(t *testing.T) {
+	placeStandbyLast(t)
+	s := newState()
+	addTo(t, &s, "standby", "xxxxxxxxxxx", guest, 1000)
+	if s.Current == nil || s.Current.VideoID != "xxxxxxxxxxx" || !s.Playback.Playing {
+		t.Fatalf("Current = %+v, Playback = %+v; want the song playing", s.Current, s.Playback)
+	}
+	if added, err := s.AddTracks(trackList("yyyyyyyyyyy", "zzzzzzzzzzz"), "standby", nil, guest, 2000); err != nil || added != 2 {
+		t.Fatalf("AddTracks = %d, %v; want 2 songs in the standby queue", added, err)
+	}
+	if standby(&s) != "yz" || queued(&s) != "" {
+		t.Errorf("queue = %q, standby = %q; want the songs in the standby queue", queued(&s), standby(&s))
+	}
+}
+
+func TestMoveTakesSongsBetweenTheLists(t *testing.T) {
+	placeStandbyLast(t)
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	add(t, &s, "bbbbbbbbbbb", host, 1000)
+	add(t, &s, "ccccccccccc", host, 1000)
+	addTo(t, &s, "standby", "xxxxxxxxxxx", host, 1000)
+
+	b := s.Queue[0].ID
+	mustApply(t, &s, Command{Type: "move", ItemID: b, Index: at(0), List: "standby"}, host, 2000)
+	if queued(&s) != "c" || standby(&s) != "bx" {
+		t.Fatalf("queue = %q, standby = %q; want \"c\" and \"bx\"", queued(&s), standby(&s))
+	}
+	x := s.Standby[1].ID
+	mustApply(t, &s, Command{Type: "move", ItemID: x, Index: at(9), List: "queue"}, host, 2000)
+	if queued(&s) != "cx" || standby(&s) != "b" {
+		t.Fatalf("queue = %q, standby = %q; want \"cx\" and \"b\"", queued(&s), standby(&s))
+	}
+	// Without a list, a song moves within its own list.
+	addTo(t, &s, "standby", "yyyyyyyyyyy", host, 1000)
+	y := s.Standby[1].ID
+	mustApply(t, &s, Command{Type: "move", ItemID: y, Index: at(0)}, host, 2000)
+	if standby(&s) != "yb" {
+		t.Errorf("standby = %q; want \"yb\"", standby(&s))
+	}
+}
+
+func TestSongsAreRemovedFromEitherList(t *testing.T) {
+	placeStandbyLast(t)
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	addTo(t, &s, "standby", "xxxxxxxxxxx", guest, 1000)
+	addTo(t, &s, "standby", "yyyyyyyyyyy", host, 1000)
+	if _, err := s.Apply(Command{Type: "remove", ItemID: s.Standby[1].ID}, guest, 2000); !errors.Is(err, errHostOnly) {
+		t.Errorf("guest removing the host's song: err = %v; want host_only", err)
+	}
+	mustApply(t, &s, Command{Type: "remove", ItemID: s.Standby[0].ID}, guest, 2000)
+	if standby(&s) != "y" {
+		t.Errorf("standby = %q; want \"y\"", standby(&s))
+	}
+}
+
+func TestSongsTakeTheirPlacesInTheStandbyQueue(t *testing.T) {
+	// The place comes from standbyPlace: at the front, every new song goes first.
+	random := standbyPlace
+	standbyPlace = func(int) int { return 0 }
+	t.Cleanup(func() { standbyPlace = random })
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	if _, err := s.AddTracks(trackList("xxxxxxxxxxx", "yyyyyyyyyyy", "zzzzzzzzzzz"), "standby", nil, guest, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if standby(&s) != "zyx" {
+		t.Errorf("standby = %q; want \"zyx\"", standby(&s))
+	}
+
+	// With random places, every song is there once, whatever its place.
+	standbyPlace = random
+	s = newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	ids := []string{}
+	for i := range 30 {
+		ids = append(ids, fmt.Sprintf("song%07d", i))
+	}
+	tracks := make([]Track, 0, len(ids))
+	for _, id := range ids {
+		tracks = append(tracks, *testTrack(id))
+	}
+	if added, err := s.AddTracks(tracks, "standby", nil, guest, 1000); err != nil || added != len(ids) {
+		t.Fatalf("AddTracks = %d, %v", added, err)
+	}
+	got := []string{}
+	for _, it := range s.Standby {
+		got = append(got, it.VideoID)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, ids) {
+		t.Errorf("standby holds %v; want each of %v once", got, ids)
+	}
+}
+
+func TestSongsGoWhereTheyAreDropped(t *testing.T) {
+	random := standbyPlace
+	standbyPlace = func(int) int { return 0 }
+	t.Cleanup(func() { standbyPlace = random })
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	add(t, &s, "bbbbbbbbbbb", host, 1000)
+	add(t, &s, "ccccccccccc", host, 1000)
+
+	mustApply(t, &s, Command{Type: "add", Track: testTrack("ddddddddddd"), Index: at(1)}, guest, 2000)
+	if queued(&s) != "bdc" {
+		t.Fatalf("queue = %q; want \"bdc\"", queued(&s))
+	}
+	// An album keeps its order from the place on.
+	if added, err := s.AddTracks(trackList("eeeeeeeeeee", "fffffffffff"), "", at(0), guest, 2000); err != nil || added != 2 {
+		t.Fatalf("AddTracks = %d, %v", added, err)
+	}
+	if queued(&s) != "efbdc" {
+		t.Fatalf("queue = %q; want \"efbdc\"", queued(&s))
+	}
+	// A place in the standby queue is kept, rather than a random one.
+	addTo(t, &s, "standby", "xxxxxxxxxxx", guest, 2000)
+	addTo(t, &s, "standby", "yyyyyyyyyyy", guest, 2000)
+	mustApply(t, &s, Command{Type: "add", Track: testTrack("zzzzzzzzzzz"), List: "standby", Index: at(2)}, guest, 2000)
+	if standby(&s) != "yxz" {
+		t.Fatalf("standby = %q; want \"yxz\"", standby(&s))
+	}
+	// A place past the end is the end, and a place before the start is refused.
+	mustApply(t, &s, Command{Type: "add", Track: testTrack("ggggggggggg"), Index: at(99)}, guest, 2000)
+	if queued(&s) != "efbdcg" {
+		t.Errorf("queue = %q; want \"efbdcg\"", queued(&s))
+	}
+	if _, err := s.Apply(Command{Type: "add", Track: testTrack("hhhhhhhhhhh"), Index: at(-1)}, guest, 2000); !errors.Is(err, errBadRequest) {
+		t.Errorf("add at -1: err = %v; want bad_request", err)
+	}
+}
+
+func TestUnknownListsAreRejected(t *testing.T) {
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	if _, err := s.Apply(Command{Type: "add", Track: testTrack("bbbbbbbbbbb"), List: "later"}, host, 1000); !errors.Is(err, errBadRequest) {
+		t.Errorf("add to an unknown list: err = %v; want bad_request", err)
+	}
+	if _, err := s.AddTracks(trackList("bbbbbbbbbbb"), "later", nil, host, 1000); !errors.Is(err, errBadRequest) {
+		t.Errorf("addTracks to an unknown list: err = %v; want bad_request", err)
 	}
 }
 

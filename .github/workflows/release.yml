@@ -158,7 +158,9 @@ jobs:
           cp -R extension dist/musictogether
           (cd dist && zip -r -X musictogether.zip musictogether)
 
+      # The notes of the release are the message of the annotated tag: what is
+      # new and what is fixed, one line each.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/musictogether.zip --title "Music Together $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" dist/musictogether.zip --title "Music Together $GITHUB_REF_NAME" --notes-from-tag --verify-tag
