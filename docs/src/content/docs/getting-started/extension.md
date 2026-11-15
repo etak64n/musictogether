@@ -8,7 +8,8 @@ Each member signs in to YouTube Music with their own Google account, because eac
 
 ## Download a release
 
-Download `musictogether-vX.Y.Z.zip` of the latest release from the [releases](https://github.com/etak64n/musictogether/releases), and extract it.
+Download [musictogether.zip](https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip), and extract it.
+The link always gives the zip of the latest release. The zips of every release are on the [releases](https://github.com/etak64n/musictogether/releases) page.
 
 - macOS: double-click the zip. A folder named `musictogether` appears next to it.
 - Windows: right-click the zip, choose Extract All, and click Extract.
@@ -59,7 +60,7 @@ The extension asks GitHub for its latest release once a day, with an ordinary re
 When a newer version is out, the popup shows Version X.Y.Z is available at its top, and a click on it opens the page of the release.
 Chrome does not replace the extension folder by itself, so the update takes these steps:
 
-1. Download and extract the new release.
+1. Download and extract [musictogether.zip](https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip) again.
 2. Delete the old extension folder, and put the new one in its place, under the same name.
 3. Open `chrome://extensions`, and click the reload button (↻) of Music Together.
 4. Reload the tabs of YouTube Music.

@@ -42,6 +42,12 @@ ADDR=127.0.0.1:8080 DATA_DIR=./data LOG_FORMAT=text TOKEN=a-local-token go run .
 
 The extension reaches this room server at `http://127.0.0.1:8080`, with the token `a-local-token`: Chrome lets an HTTPS page reach `localhost` and `127.0.0.1` over HTTP, so the settings take these two hosts with `http://`. Every other room server needs an HTTPS address, as [Run a room server](/musictogether/getting-started/server/) describes.
 
+This command builds the image of the room server from source, as the Release workflow does.
+
+```sh
+docker build -t musictogether server
+```
+
 ## Tests
 
 - `go test ./...` in server/ runs the tests of the room server: its API over HTTP, the rules of a room, the token, the settings, and the logs.
@@ -55,7 +61,14 @@ The behavior of the extension in YouTube Music depends on the page of YouTube Mu
 1. Set the new version in extension/manifest.json and in server/main.go.
 2. Push the tag `vX.Y.Z`.
 
-The Release workflow (.github/workflows/release.yml) checks that both versions match the tag, packs extension/ into `musictogether-vX.Y.Z.zip`, and publishes the zip as a release.
+The Release workflow (.github/workflows/release.yml) takes these steps:
+
+1. It checks that both versions match the tag.
+2. It builds the image of the room server on amd64 and on arm64, each on a runner of its own, and tries each image: the index page, a request without the token, and a request with it.
+3. It publishes the image as `ghcr.io/etak64n/musictogether` with the tags `X.Y.Z`, `X.Y`, and `latest`. A version with a hyphen, such as `1.3.0-rc.1`, gets its own tag only.
+4. It packs extension/ into `musictogether.zip`, and publishes the zip as the release of the tag.
+
+The zip has the same name in every release, so that `https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip` always gives the latest one.
 The folder in the zip is named `musictogether` in every release, so that a member who replaces the folder keeps the settings of the extension.
 The Docs workflow publishes this site for the release.
 

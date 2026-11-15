@@ -1,9 +1,10 @@
-# Runs the room server on port 8080 of this machine, keeping the rooms in a
-# named volume. The extension needs HTTPS, so put a reverse proxy or a tunnel
-# in front of it. The token comes from the .env file next to this file.
+# Runs the room server from its published image on port 8080 of this machine,
+# keeping the rooms in a named volume. The extension needs HTTPS, so put a
+# reverse proxy or a tunnel in front of it. The token comes from the .env file
+# next to this file. "docker compose pull" fetches a newer image.
 services:
   musictogether:
-    build: .
+    image: ghcr.io/etak64n/musictogether:latest
     restart: unless-stopped
     environment:
       # The server listens on every interface inside its container. The ports

@@ -1,6 +1,11 @@
-# Packages the extension when a version tag is pushed, and publishes the zip
-# as a release for people to download. The folder in the zip has the same name
-# in every release, so that people who replace the folder keep their settings.
+# Publishes a version for every tag v*: the image of the room server to
+# ghcr.io/etak64n/musictogether for amd64 and arm64, and the extension as
+# musictogether.zip on the GitHub release of the tag.
+#
+# The zip has the same name in every release, so that
+# https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip
+# always gives the latest one, and the folder in it is named musictogether in
+# every release, so that people who replace the folder keep their settings.
 name: Release
 
 on:
@@ -8,11 +13,15 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  release:
+  check:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -29,13 +38,127 @@ jobs:
             exit 1
           fi
 
+  # Each architecture builds on a runner of its own, which is far faster than
+  # emulation, and tries its image there before any tag names it.
+  image:
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: server
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          no-cache: true
+
+      # The image answers its index page, refuses the API without the token, and
+      # answers it with the token. An image that fails stays under its digest alone.
+      - name: Try the image
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run -d --name musictogether -p 127.0.0.1:8080:8080 \
+            -e ADDR=0.0.0.0:8080 -e DATA_DIR=/data -e LOG_FORMAT=json -e TOKEN=release-check-token "$REF"
+          for _ in $(seq 1 30); do curl -fs http://127.0.0.1:8080/ && break; sleep 1; done
+          curl -fs http://127.0.0.1:8080/ | grep -q "Music Together server ${GITHUB_REF_NAME#v}"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/time)" = 401
+          curl -fs -H 'Authorization: Bearer release-check-token' http://127.0.0.1:8080/api/time | grep -q '"now"'
+          docker logs musictogether
+
+      - name: Keep the digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-image:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # v1.2.3 is published as 1.2.3, 1.2, and latest, which the action adds to a
+      # version that is not a prerelease; v1.3.0-rc.1 only as 1.3.0-rc.1.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Join the architectures under the tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+
+      - run: docker buildx imagetools inspect "${{ env.IMAGE }}:${{ steps.meta.outputs.version }}"
+
+  # The GitHub release comes after the image, so that the version it announces
+  # is complete.
+  release:
+    needs: publish-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
       - name: Package
         run: |
           mkdir dist
           cp -R extension dist/musictogether
-          (cd dist && zip -r -X "musictogether-$GITHUB_REF_NAME.zip" musictogether)
+          (cd dist && zip -r -X musictogether.zip musictogether)
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "dist/musictogether-$GITHUB_REF_NAME.zip" --title "Music Together $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" dist/musictogether.zip --title "Music Together $GITHUB_REF_NAME" --generate-notes --verify-tag

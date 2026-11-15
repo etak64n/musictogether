@@ -5,7 +5,7 @@ description: Run the room server with Docker Compose on a machine of your own, g
 
 The room server is one program, written in Go with its standard library only.
 It keeps the rooms in memory and in one JSON file per room, and sends every change of a room to the people in it.
-This page runs the room server with Docker Compose. It needs Git, Docker with Compose, and a domain name that points to the machine, or a tunnel service that gives the machine an HTTPS address.
+This page runs the published image of the room server with Docker Compose. It needs Git, Docker with Compose, and a domain name that points to the machine, or a tunnel service that gives the machine an HTTPS address.
 
 ## Set the token
 
@@ -34,12 +34,13 @@ TOKEN=a-long-token-of-your-own
 
 ## Start the server
 
-This command builds the image and starts the room server in the background.
+This command fetches the image and starts the room server in the background.
 
 ```sh
-docker compose up -d --build
+docker compose up -d
 ```
 
+- The image is `ghcr.io/etak64n/musictogether:latest`, for amd64 and arm64. Each release also has a tag of its own version, such as `0.3.2`, and of its minor version, such as `0.3`, which a server can name in compose.yaml in place of `latest` to stay on one version.
 - The server listens on port 8080 of 127.0.0.1, so only programs on the same machine reach it. A reverse proxy or a tunnel on the machine forwards requests from the internet to it.
 - The rooms are kept in a named volume, so they remain when the container is replaced.
 - `restart: unless-stopped` starts the server again after the machine restarts.
@@ -84,11 +85,11 @@ The people who listen with you enter two values in the settings of the extension
 
 ## Update the server
 
-These commands fetch a new release and replace the container.
+These commands fetch the image of the latest release and replace the container.
 
 ```sh
-git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 The rooms remain in the volume. The extension of a member who is in a room connects again by itself within seconds.

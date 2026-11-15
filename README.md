@@ -35,14 +35,14 @@ Run the room server on a machine with Docker:
 git clone https://github.com/etak64n/musictogether.git
 cd musictogether/server
 cp .env.example .env    # then set TOKEN in .env
-docker compose up -d --build
+docker compose up -d
 ```
 
-The server listens on 127.0.0.1:8080. Give it an HTTPS address with a reverse proxy or a tunnel, because the extension connects over HTTPS only.
+Compose runs the image `ghcr.io/etak64n/musictogether:latest`, for amd64 and arm64, and the server listens on 127.0.0.1:8080. Give it an HTTPS address with a reverse proxy or a tunnel, because the extension connects over HTTPS only.
 
 Install the extension in Chrome:
 
-1. Download `musictogether-vX.Y.Z.zip` from the [releases](https://github.com/etak64n/musictogether/releases), extract it, and move the folder `musictogether` to a place you keep.
+1. Download [musictogether.zip](https://github.com/etak64n/musictogether/releases/latest/download/musictogether.zip), which is always the latest release, extract it, and move the folder `musictogether` to a place you keep.
 2. Open `chrome://extensions`, turn on Developer mode, click Load unpacked, and choose the folder.
 3. Click the gear in the popup of Music Together, and enter the address of the server and its token.
 
