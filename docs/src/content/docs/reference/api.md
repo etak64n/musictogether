@@ -109,7 +109,7 @@ The stream carries these events:
 | --- | --- | --- |
 | `hello` | First | The session of this connection |
 | `room` | After `hello`, and after every change of the room | The whole room |
-| `closed` | When the host closes the room | `{}`. The stream ends after it. |
+| `closed` | When the host ends the room | `{}`. The stream ends after it. |
 
 ```text
 event: hello
@@ -137,6 +137,7 @@ The data of `room`:
 | `participantControl` | boolean | Whether participants may seek, skip, and reorder the queue. |
 | `current` | item or null | The song that plays. `null` while nothing plays, and the queue is then empty. |
 | `queue` | array of items | The songs after `current`, in the order they play. |
+| `history` | array of items | The songs that played, oldest first: the last 50 that the room moved past with `next` or `ended`. |
 | `playback` | playback | The shared timeline of the room. |
 | `members` | array of members | The members connected to the room, in the order they joined. |
 
@@ -202,11 +203,11 @@ The commands:
 | `remove` | The host, and the member who added the item | Removes the item from the queue. |
 | `move` | The host, and participants with the permission | Takes the item out of the queue and puts it back at `index`. 0 plays it next, and an index past the end puts it last. |
 | `seek` | The host, and participants with the permission | Moves the timeline to `position`. A position past the end of the song is the end. |
-| `next` | The host, and participants with the permission | Skips `current`, when `itemId` is still `current`. |
-| `ended` | Everyone | Moves on from `current` when `itemId` is still `current` and the timeline is within 5 seconds of its end, or at once when its `duration` is 0. |
+| `next` | The host, and participants with the permission | Skips `current`, when `itemId` is still `current`. The skipped song goes to the end of `history`. |
+| `ended` | Everyone | Moves on from `current` when `itemId` is still `current` and the timeline is within 5 seconds of its end, or at once when its `duration` is 0. The song goes to the end of `history`. |
 | `listening` | Everyone | Sets whether the member of this connection listens. The room moves forward while anyone listens. |
 | `participantControl` | The host | Gives participants the permission, or takes it away. |
-| `close` | The host | Deletes the room. Every member receives `closed`, and every stream ends. |
+| `close` | The host | Deletes the room. Every member receives `closed`, and every stream ends. The extension sends it 10 seconds after the host clicks End room, unless the host clicks Undo. |
 
 `next` and `ended` name the item to move past, so that several members who reach the end of the same song at once move the room on only once.
 

@@ -41,6 +41,7 @@ ADDR=127.0.0.1:8080 DATA_DIR=./data LOG_FORMAT=text TOKEN=a-local-token go run .
 ```
 
 The extension reaches this room server at `http://127.0.0.1:8080`, with the token `a-local-token`: Chrome lets an HTTPS page reach `localhost` and `127.0.0.1` over HTTP, so the settings take these two hosts with `http://`. Every other room server needs an HTTPS address, as [Run a room server](/musictogether/getting-started/server/) describes.
+Chrome lets YouTube Music reach this computer only with the permission of the site that Chrome 145 and later call Apps on device. Until it is granted, Chrome holds the requests of the extension, and the popup shows Open site settings, which opens the settings of music.youtube.com where you allow it.
 
 This command builds the image of the room server from source, as the Release workflow does.
 

@@ -8,7 +8,8 @@
 </head>
 <body>
   <svg class="sprite" aria-hidden="true">
-    <symbol id="icon-logo" viewBox="0 0 24 24"><path d="M9 5.2 19 3.2v3L9 8.2z"/><rect x="9" y="7" width="1.6" height="10"/><rect x="17.4" y="5" width="1.6" height="10"/><ellipse cx="7.9" cy="17.4" rx="2.9" ry="2.2" transform="rotate(-20 7.9 17.4)"/><ellipse cx="16.3" cy="15.4" rx="2.9" ry="2.2" transform="rotate(-20 16.3 15.4)"/></symbol>
+    <!-- The note of icons/icon.svg, placed as there, in the middle of a square around its center. -->
+    <symbol id="icon-logo" viewBox="6 6 116 116"><g transform="translate(-4 3)"><path d="M50 30 100 20v16L50 46z"/><rect x="50" y="38" width="8" height="50"/><rect x="92" y="28" width="8" height="50"/><ellipse cx="47" cy="90" rx="15" ry="11" transform="rotate(-20 47 90)"/><ellipse cx="89" cy="80" rx="15" ry="11" transform="rotate(-20 89 80)"/></g></symbol>
     <symbol id="icon-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></symbol>
     <symbol id="icon-pause" viewBox="0 0 24 24"><path d="M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></symbol>
     <symbol id="icon-next" viewBox="0 0 24 24"><path d="M5 6.5v11a1 1 0 0 0 1.57.82l7.86-5.5a1 1 0 0 0 0-1.64L6.57 5.68A1 1 0 0 0 5 6.5zM17 5h1.5a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H17a.5.5 0 0 1-.5-.5v-13A.5.5 0 0 1 17 5z"/></symbol>
@@ -83,9 +84,11 @@
       </form>
 
       <p id="lobby-error" class="alert" role="alert" hidden></p>
+      <button id="open-site-settings" class="button" type="button" data-i18n="openSiteSettings" hidden></button>
     </section>
 
     <section id="room" class="stack" hidden>
+      <p id="ending" class="alert" role="status" hidden></p>
       <p id="conn" class="conn" hidden></p>
 
       <div id="now" class="panel now" hidden>
@@ -112,8 +115,11 @@
       </div>
 
       <div id="queue-panel" class="panel queue" hidden>
-        <h2 class="section-title" data-i18n="upNext"></h2>
-        <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+        <h2 class="section-title" data-i18n="queueTitle"></h2>
+        <div id="queue-scroll" class="queue-scroll">
+          <ul id="played" class="list played" data-i18n-label="playedSongs"></ul>
+          <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+        </div>
       </div>
 
       <form id="search-form" class="search" role="search">

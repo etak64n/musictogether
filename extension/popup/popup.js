@@ -7,7 +7,6 @@ import { hasString, loadLanguage, localize, translator } from '../i18n.js';
 const YTM_URL = 'https://music.youtube.com/';
 const ROOM_ID_PATTERN = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/;
 const TOAST_MS = 3000;
-const CLOSE_CONFIRM_MS = 4000;
 
 const $ = (id) => document.getElementById(id);
 
@@ -47,8 +46,7 @@ let localError = '';
 let shownNotice = 0;
 let toastTimer = 0;
 let searchSeq = 0;
-let closeArmedUntil = 0;
-let rendered = { now: '', queue: '' };
+let rendered = { now: '', queue: '', played: '' };
 
 function isHost() {
   return Boolean(view && view.room && view.room.hostId === view.memberId);
@@ -183,7 +181,7 @@ function render() {
 
   if (section === 'lobby') renderLobby();
   if (section === 'room') renderRoom();
-  if (section !== 'room') rendered = { now: '', queue: '' };
+  if (section !== 'room') rendered = { now: '', queue: '', played: '' };
 
   if (view && view.notice && view.notice.id !== shownNotice) {
     shownNotice = view.notice.id;
@@ -197,6 +195,7 @@ function renderLobby() {
   const text = localError || (view.error ? message(view.error) : '');
   $('lobby-error').textContent = text;
   $('lobby-error').hidden = !text;
+  $('open-site-settings').hidden = Boolean(localError) || view.error !== 'loopback_permission';
 }
 
 function renderRoom() {
@@ -209,16 +208,45 @@ function renderRoom() {
   renderLeave();
   renderMembers(room ? room.members : [], room ? room.hostId : '');
   renderNow(room);
-  renderQueue(room ? room.queue : []);
+  const queue = room ? room.queue : [];
+  // A server older than the history sends none.
+  const history = room && room.history ? room.history : [];
+  $('queue-panel').hidden = queue.length === 0 && history.length === 0;
+  renderPlayed(history);
+  renderQueue(queue);
 }
 
-// The host leaving closes the room for everyone, so the host presses twice.
+// The songs that played, in gray above the songs that wait. When another song
+// has finished, the queue scrolls so that the last one that played is at its
+// top, with the songs that wait below it.
+function renderPlayed(history) {
+  const key = JSON.stringify(history.map((item) => item.id));
+  if (key === rendered.played) return;
+  rendered.played = key;
+  $('played').replaceChildren(...history.map((item) => songRow(item, item.artists, document.createElement('span'), item.addedBy)));
+  const last = $('played').lastElementChild;
+  $('queue-scroll').scrollTop = last ? last.offsetTop : 0;
+}
+
+// The host ends the room for everyone with one click, and can take it back while
+// the tab counts down; the button then says so.
 function renderLeave() {
   const host = isHost();
-  const armed = host && Date.now() < closeArmedUntil;
-  $('leave').textContent = t(!host ? 'leave' : armed ? 'closeConfirm' : 'closeRoom');
-  $('leave').classList.toggle('danger', armed);
+  const ending = Boolean(host && view.endingUntil);
+  $('leave').textContent = t(!host ? 'leave' : ending ? 'undoEnd' : 'endRoom');
+  renderEnding();
 }
+
+function renderEnding() {
+  const until = view && view.endingUntil;
+  $('ending').hidden = !until;
+  // The count stops at 1: the room ends then, and the popup moves to the lobby.
+  if (until) $('ending').textContent = t('endingIn', { seconds: Math.max(1, Math.ceil((until - Date.now()) / 1000)) });
+}
+
+setInterval(() => {
+  if (view && view.endingUntil) renderEnding();
+}, 250);
 
 // One line for the host and one for everyone else. A host who has closed
 // the tab is not in the list.
@@ -268,7 +296,6 @@ function renderQueue(queue) {
   const key = JSON.stringify([movable, queue.map((item) => [item.id, removable(item)])]);
   if (key === rendered.queue) return;
   rendered.queue = key;
-  $('queue-panel').hidden = queue.length === 0;
   $('queue').replaceChildren(...queue.map((item) => {
     let action = document.createElement('span');
     if (removable(item)) {
@@ -314,12 +341,12 @@ function startDrag() {
   drag.frame = requestAnimationFrame(dragFrame);
 }
 
-// Near the list's top or bottom, the list scrolls under the dragged row.
+// Near the top or bottom of the queue, the queue scrolls under the dragged row.
 function dragFrame() {
-  const list = $('queue');
-  const box = list.getBoundingClientRect();
-  if (drag.y < box.top + DRAG_EDGE) list.scrollTop -= DRAG_SCROLL;
-  else if (drag.y > box.bottom - DRAG_EDGE) list.scrollTop += DRAG_SCROLL;
+  const scroller = $('queue-scroll');
+  const box = scroller.getBoundingClientRect();
+  if (drag.y < box.top + DRAG_EDGE) scroller.scrollTop -= DRAG_SCROLL;
+  else if (drag.y > box.bottom - DRAG_EDGE) scroller.scrollTop += DRAG_SCROLL;
   layoutDrag();
   drag.frame = requestAnimationFrame(dragFrame);
 }
@@ -804,6 +831,12 @@ $('join-form').addEventListener('submit', (event) => {
 
 // --- settings ---
 
+// A server on this computer needs the site's permission to reach this computer,
+// which the site settings of YouTube Music grant.
+$('open-site-settings').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'chrome://settings/content/siteDetails?site=' + encodeURIComponent('https://music.youtube.com') });
+});
+
 // The settings page opens in a tab of its own, which closes the popup.
 for (const id of ['settings', 'open-settings']) {
   $(id).addEventListener('click', () => chrome.runtime.openOptionsPage());
@@ -822,15 +855,12 @@ $('copy-id').addEventListener('click', async () => {
 });
 
 $('leave').addEventListener('click', () => {
-  if (isHost() && Date.now() >= closeArmedUntil) {
-    closeArmedUntil = Date.now() + CLOSE_CONFIRM_MS;
-    renderLeave();
-    setTimeout(renderLeave, CLOSE_CONFIRM_MS + 50);
-    return;
+  if (!isHost()) {
+    hideResults();
+    post({ type: 'leave' });
+  } else {
+    post({ type: view.endingUntil ? 'undo-close' : 'close' });
   }
-  closeArmedUntil = 0;
-  hideResults();
-  post({ type: isHost() ? 'close' : 'leave' });
 });
 
 $('participant-control').addEventListener('change', () => {

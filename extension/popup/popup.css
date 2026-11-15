@@ -241,6 +241,7 @@ main {
   place-items: center;
   width: 30px;
   height: 30px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #ffffff;
@@ -273,6 +274,7 @@ main {
   place-items: center;
   width: 24px;
   height: 24px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #ffffff;
@@ -661,8 +663,29 @@ main {
   }
 }
 
-#queue {
+/* The queue scrolls as one: the songs that played, in gray, and then the
+   songs that wait. The lists in it do not scroll on their own. */
+.queue-scroll {
+  position: relative;
   max-height: 200px;
+  overflow-y: auto;
+}
+
+.queue-scroll .list {
+  overflow: visible;
+}
+
+/* A song that played: faded, with its artwork in gray. */
+.played li {
+  opacity: 0.45;
+}
+
+.played .art {
+  filter: grayscale(1);
+}
+
+.played:not(:empty) {
+  border-bottom: 1px solid var(--panel-soft);
 }
 
 .results {
@@ -671,7 +694,7 @@ main {
 }
 
 /* The side panel is as tall as the window, so its lists grow with it. */
-html.panel #queue,
+html.panel .queue-scroll,
 html.panel .results {
   max-height: 45vh;
 }
@@ -716,6 +739,13 @@ html.panel .results {
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The room ID reaches 4px to the left of its column, so that its text lines up
+   with the name below it while its box has room around the text. Its cell
+   shows that part instead of cutting it off. */
+.facts dd:has(> .room-id) {
+  overflow: visible;
 }
 
 .facts dd.absent {

@@ -102,6 +102,7 @@ type roomView struct {
 	ParticipantControl bool     `json:"participantControl"`
 	Current            *Item    `json:"current"`
 	Queue              []Item   `json:"queue"`
+	History            []Item   `json:"history"`
 	Playback           Playback `json:"playback"`
 	Members            []member `json:"members"`
 }
@@ -118,6 +119,10 @@ func NewHub(store *Store, log *slog.Logger, states []State) *Hub {
 	for _, st := range states {
 		if st.Queue == nil {
 			st.Queue = []Item{}
+		}
+		// Rooms saved before the history was kept have none.
+		if st.History == nil {
+			st.History = []Item{}
 		}
 		room := &Room{state: st, sessions: make(map[*Session]struct{})}
 		// Nobody is connected yet: give listeners the usual grace to reconnect
@@ -148,7 +153,7 @@ func (h *Hub) CreateRoom(addr, clientID string, log *slog.Logger) (string, error
 		id = newRoomID()
 	}
 	ms := now.UnixMilli()
-	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), Queue: []Item{}}
+	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), Queue: []Item{}, History: []Item{}}
 	if err := h.store.Save(st); err != nil {
 		return "", fmt.Errorf("save new room: %w", err)
 	}
@@ -459,6 +464,7 @@ func (h *Hub) broadcastLocked(room *Room, now time.Time) {
 		ParticipantControl: room.state.ParticipantControl,
 		Current:            room.state.Current,
 		Queue:              room.state.Queue,
+		History:            room.state.History,
 		Playback:           room.state.Playback,
 		Members:            membersOf(room.sessions),
 	})

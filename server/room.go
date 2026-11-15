@@ -12,10 +12,11 @@ import (
 
 // Limits that keep a room small enough to send whole on every change.
 const (
-	maxQueueItems = 200
-	maxTextRunes  = 200
-	maxNameRunes  = 30
-	maxDuration   = 24 * 60 * 60
+	maxQueueItems   = 200
+	maxHistoryItems = 50
+	maxTextRunes    = 200
+	maxNameRunes    = 30
+	maxDuration     = 24 * 60 * 60
 )
 
 // A member's player may report the end of a song this many seconds before
@@ -67,10 +68,12 @@ type State struct {
 	HostID string `json:"hostId"`
 	// ParticipantControl lets members other than the host seek, skip and
 	// reorder the queue. Only the host can change it.
-	ParticipantControl bool     `json:"participantControl"`
-	Current            *Item    `json:"current"`
-	Queue              []Item   `json:"queue"`
-	Playback           Playback `json:"playback"`
+	ParticipantControl bool   `json:"participantControl"`
+	Current            *Item  `json:"current"`
+	Queue              []Item `json:"queue"`
+	// History is the songs that played, oldest first, up to maxHistoryItems.
+	History  []Item   `json:"history"`
+	Playback Playback `json:"playback"`
 }
 
 // Command is one change that a member asks for.
@@ -221,7 +224,15 @@ func (s *State) ResumeAt(now int64) bool {
 	return true
 }
 
+// advance moves past the current song, which goes to the end of the history,
+// to the first song of the queue, or leaves the room idle when the queue is empty.
 func (s *State) advance(now int64) {
+	if s.Current != nil {
+		s.History = append(s.History, *s.Current)
+		if len(s.History) > maxHistoryItems {
+			s.History = slices.Delete(s.History, 0, len(s.History)-maxHistoryItems)
+		}
+	}
 	if len(s.Queue) == 0 {
 		s.Current = nil
 		s.Playback = Playback{UpdatedAt: now}

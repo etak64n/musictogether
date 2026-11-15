@@ -13,7 +13,7 @@ Music Together consists of the room server and an extension in the Chrome of eac
 - The **settings page** (extension/options/) keeps the language, the way the button opens the popup, the address of the room server, and the token in the storage of the extension.
 - The **room script** (extension/content/room.js) runs in every tab of YouTube Music. Chrome runs it in an **isolated world**: it reads the document of the page, and its JavaScript variables are separate from those of the page. It keeps the connection to the room server, and decides what the player of the tab plays.
 - The **page script** (extension/content/page.js) runs in the JavaScript world of the page of YouTube Music, where the player of YouTube Music is reachable. It drives the player for the room script, and reports what the player does. The two scripts exchange JSON in DOM events, because a DOM event reaches both worlds.
-- The **service worker** (extension/background.js) remembers which tab is in a room, so that the popup finds that tab and a reloaded tab joins its room again. It also shows the number of songs in Up next on the button, and makes the button open the popup in the mini window or in the side panel, as the settings say. Once a day, it asks GitHub for the latest release, and keeps a newer version for the popup, which shows a notice of it.
+- The **service worker** (extension/background.js) remembers which tab is in a room, so that the popup finds that tab and a reloaded tab joins its room again. It also shows the number of songs waiting in the queue on the button, and makes the button open the popup in the mini window or in the side panel, as the settings say. Once a day, it asks GitHub for the latest release, and keeps a newer version for the popup, which shows a notice of it.
 
 The **room server** (server/) keeps the rooms, takes the commands of the members, and sends every change of a room to every member of it.
 
@@ -21,12 +21,12 @@ The **room server** (server/) keeps the rooms, takes the commands of the members
 
 A member joins a room with a request that stays open: `POST /api/rooms/{id}/stream`.
 The response is an **event stream**: a response that the server keeps writing to, one event at a time.
-The first event, `hello`, gives the member a session ID. Every later event, `room`, carries the whole room: its queue, its timeline, and its members.
+The first event, `hello`, gives the member a session ID. Every later event, `room`, carries the whole room: its queue, the songs that played, its timeline, and its members.
 A member changes the room with a separate request per change, `POST /api/rooms/{id}/commands`, which carries the session ID.
 A request that has no answer within 10 seconds fails, so that the popup shows an error in place of waiting. For an event stream, the limit covers the wait for the response only.
 When the stream breaks, the room script opens a new one after 1, 2, 4, 8, 15, and then every 30 seconds.
 
-The room server sends the whole room in every `room` event, because a room is small: at most 200 songs and 50 connections. A member who misses an event still has the whole room at the next one.
+The room server sends the whole room in every `room` event, because a room is small: at most 200 songs waiting, 50 that played, and 50 connections. A member who misses an event still has the whole room at the next one.
 
 ## The timeline of a room
 

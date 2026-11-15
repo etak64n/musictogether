@@ -27,9 +27,13 @@
   const NEXT_RETRY_MS = 3000;
   const STALL_NOTICE_MS = 5000;
   const NOTICE_MS = 5000;
+  // How long the host has to take back ending the room.
+  const END_DELAY_MS = 10000;
   const OPTIMISTIC_MS = 2000;
   const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30]; // seconds
   const REQUEST_TIMEOUT_MS = 10000;
+  // How long a request to this computer waits while Chrome asks for the permission.
+  const LOOPBACK_PROMPT_MS = 60000;
   const CLOCK_SAMPLES = 5;
   const CLOCK_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -152,14 +156,34 @@
 
   const isLoopback = (server) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]?/.test(server.url);
 
+  // Chrome lets a page on the internet, such as YouTube Music, reach a server
+  // on this computer only with the site's permission "loopback-network". Until
+  // it is granted, Chrome holds the request and asks for it in the tab, behind
+  // the popup, so a request that times out checks the permission, and the popup
+  // tells where to grant it.
+  async function loopbackPermission() {
+    try {
+      return (await navigator.permissions.query({ name: 'loopback-network' })).state;
+    } catch {
+      // A Chrome without the permission does not hold the request.
+      return 'granted';
+    }
+  }
+
   // A request that has no answer within REQUEST_TIMEOUT_MS fails as "timeout",
-  // so that the popup never waits forever. Chrome holds a request to this
-  // computer while it asks in the tab whether YouTube Music may reach it, so a
-  // server on this computer gets a message that says so. The limit covers the
-  // wait for the answer only: the body of an event stream can last for hours.
+  // so that the popup never waits forever. The limit covers the wait for the
+  // answer only: the body of an event stream can last for hours.
   async function request(server, path, body, signal) {
+    const loopback = isLoopback(server);
+    const permission = loopback ? await loopbackPermission() : 'granted';
+    if (permission === 'denied') throw new ServerError('loopback_permission');
+    // While Chrome asks, the popup says where to answer, and the request waits longer.
+    if (permission === 'prompt' && busy) {
+      error = 'loopback_prompt';
+      publish();
+    }
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => timeout.abort(), permission === 'prompt' ? LOOPBACK_PROMPT_MS : REQUEST_TIMEOUT_MS);
     let response;
     try {
       response = await fetch(server.url + path, {
@@ -168,9 +192,14 @@
         body: JSON.stringify(body),
         cache: 'no-store',
         signal: signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal,
+        // Chrome requires this mark on a request from an HTTPS page to HTTP on this computer.
+        ...(loopback ? { targetAddressSpace: 'loopback' } : {}),
       });
     } catch (e) {
-      if (timeout.signal.aborted) throw new ServerError(isLoopback(server) ? 'timeout_local' : 'timeout');
+      if (timeout.signal.aborted) {
+        if (loopback && (await loopbackPermission()) !== 'granted') throw new ServerError('loopback_permission');
+        throw new ServerError('timeout');
+      }
       if (e.name === 'AbortError') throw e;
       throw new ServerError('network');
     } finally {
@@ -193,6 +222,7 @@
         headers: { Authorization: authorization(server) },
         cache: 'no-store',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        ...(isLoopback(server) ? { targetAddressSpace: 'loopback' } : {}),
       });
       if (!response.ok) throw new ServerError('network');
       const { now } = await response.json();
@@ -280,7 +310,7 @@
       if (conn !== c) return;
       if (e.code === 'room_not_found') {
         endRoom(c, c.sessionId ? 'room_gone' : 'room_not_found');
-      } else if (e.code === 'bad_request' || e.code === 'room_full' || e.code === 'unauthorized' || (busy && !c.retry)) {
+      } else if (e.code === 'bad_request' || e.code === 'room_full' || e.code === 'unauthorized' || e.code === 'loopback_permission' || (busy && !c.retry)) {
         // A first attempt that fails is reported instead of being retried, and
         // so is a wrong token, which trying again does not fix.
         endRoom(c, e.code || 'network');
@@ -396,6 +426,8 @@
     if (c.controller) c.controller.abort();
     clearTimeout(reconnectTimer);
     clearTimeout(clockTimer);
+    if (ending) clearTimeout(ending.timer);
+    ending = null;
     status = 'idle';
     busy = false;
     room = null;
@@ -510,6 +542,33 @@
   }
 
   const isHost = () => Boolean(room && conn && room.hostId === conn.memberId);
+
+  // The host ends the room with one click, and the room ends END_DELAY_MS later,
+  // so that the host can take it back until then. The others notice nothing
+  // in that time. A tab that closes or reloads before then leaves the room as
+  // it is.
+  let ending = null; // { until, timer }
+
+  function startEnding() {
+    if (!conn || status !== 'connected' || !isHost() || ending) return;
+    const c = conn;
+    const timer = setTimeout(() => {
+      if (conn !== c) return;
+      ending = null;
+      // Every member, the host included, is told by a "closed" event.
+      command({ type: 'close' });
+      publish();
+    }, END_DELAY_MS);
+    ending = { until: Date.now() + END_DELAY_MS, timer };
+    publish();
+  }
+
+  function cancelEnding() {
+    if (!ending) return;
+    clearTimeout(ending.timer);
+    ending = null;
+    publish();
+  }
   const canControl = () => isHost() || Boolean(room && room.participantControl);
 
   // --- following the room ---
@@ -660,6 +719,7 @@
       listening,
       room,
       notice: notice && notice.until > Date.now() ? { id: notice.id, code: notice.code } : null,
+      endingUntil: ending ? ending.until : null,
     };
   }
 
@@ -758,8 +818,10 @@
         });
         break;
       case 'close':
-        // Every member, the host included, is told by a "closed" event.
-        command({ type: 'close' });
+        startEnding();
+        break;
+      case 'undo-close':
+        cancelEnding();
         break;
     }
   }

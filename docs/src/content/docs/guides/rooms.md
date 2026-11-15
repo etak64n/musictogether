@@ -34,13 +34,15 @@ A song reaches the room in either of these ways:
 - Search in the search field of the popup, and click ＋ next to the song.
 - In YouTube Music, open the ⋮ menu of a song, and choose Add to Music Together. The item is in the menu while the tab is in a room.
 
-A song added to a room where nothing plays starts at once. Any other song goes to the end of Up next.
-Up next and the playing song show the name of the person who added each song, after its artists.
-While Chrome is in a room, the button of Music Together shows the number of songs in Up next, up to 99.
+A song added to a room where nothing plays starts at once. Any other song waits at the end of the Queue.
+The Queue and the playing song show the name of the person who added each song, after its artists.
+While Chrome is in a room, the button of Music Together shows the number of songs waiting in the Queue, up to 99.
+
+The songs that have played stay at the top of the Queue in gray, up to the last 50, with the songs that wait below them. When a song finishes, the Queue scrolls so that the song that played last is at its top.
 
 ## Reorder the queue
 
-Drag a song in Up next up or down. The song at the top plays next.
+Drag a waiting song in the Queue up or down. The first waiting song plays next. The songs that have played stay where they are.
 Reordering needs the host, or a participant whom the host allows to control playback.
 
 ## Pause your own player
@@ -52,7 +54,7 @@ Playing again starts the room's current song at the room's current position, whi
 
 - While Chrome is in a room, the tab of the room plays the room's songs. A song started in that tab by hand is replaced by the room's song. While nothing plays in the room, the tab plays anything.
 - Chrome is in one room at a time, in one tab. Joining in another tab takes the first tab out of the room.
-- When a song ends, the room plays the next song in Up next. When Up next is empty, the room stops, and the autoplay and radio of YouTube Music do not continue it.
+- When a song ends, the room plays the first song waiting in the Queue. When no song waits, the room stops, and the autoplay and radio of YouTube Music do not continue it.
 - The room moves forward while at least one member listens. When every member has paused, the room stops at that position, and it moves on from there when someone plays again.
 - When every listening member has left the room, the room waits 30 seconds for them to connect again, and then stops at its position.
 - A room that nobody joins or changes for 7 days is deleted.
@@ -72,4 +74,4 @@ Playing again starts the room's current song at the room's current position, whi
 | The token is wrong | The token in the settings differs from the room server's. Ask the person who runs the server for the token, and enter it in the settings again. |
 | Cannot reach the server | Chrome cannot reach the address of the server in the settings. Check the address, and ask the person who runs the server whether it is running. |
 | The server does not answer. Check the address of the server | The server gave no answer within 10 seconds. Check the address in the settings, and ask the person who runs the server whether it is running. |
-| The server does not answer. If Chrome asks in the YouTube Music tab to let it access this computer, allow it | Chrome holds a request to a room server on the same computer until you allow YouTube Music to reach this computer. Look for the question of Chrome in the YouTube Music tab, and allow it. |
+| Chrome does not let YouTube Music reach this computer. Open the site settings, and allow Apps on device | The room server runs on the same computer, and Chrome lets YouTube Music reach this computer only with a permission of the site. Click Open site settings, allow Apps on device for music.youtube.com, and reload the tab of YouTube Music. |

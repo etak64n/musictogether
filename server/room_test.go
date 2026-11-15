@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -388,5 +389,50 @@ func TestNamesAreCleaned(t *testing.T) {
 	long := "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめも"
 	if got, _ := cleanName(long); got != long[:len("あ")*maxNameRunes] {
 		t.Errorf("cleanName cut %q to %q", long, got)
+	}
+}
+
+func TestPlayedSongsGoToTheHistory(t *testing.T) {
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 0)
+	add(t, &s, "bbbbbbbbbbb", guest, 0)
+	add(t, &s, "ccccccccccc", host, 0)
+	add(t, &s, "ddddddddddd", guest, 0)
+
+	// A skipped song played too, and a song that finished.
+	mustApply(t, &s, Command{Type: "next", ItemID: s.Current.ID}, host, 1000)
+	mustApply(t, &s, Command{Type: "ended", ItemID: s.Current.ID}, guest, 199_000)
+	// A song removed from the queue never played.
+	mustApply(t, &s, Command{Type: "remove", ItemID: s.Queue[0].ID}, host, 200_000)
+
+	var played []string
+	for _, item := range s.History {
+		played = append(played, item.VideoID+" by "+item.AddedBy)
+	}
+	if len(played) != 2 || played[0] != "aaaaaaaaaaa by ねこ" || played[1] != "bbbbbbbbbbb by いぬ" {
+		t.Errorf("History = %v; want a by ねこ, then b by いぬ", played)
+	}
+	if s.Current == nil || s.Current.VideoID != "ccccccccccc" {
+		t.Errorf("Current = %+v; want c", s.Current)
+	}
+}
+
+func TestHistoryKeepsTheLatestSongs(t *testing.T) {
+	s := newState()
+	ids := []string{}
+	for i := range maxHistoryItems + 10 {
+		id := fmt.Sprintf("song%07d", i)
+		ids = append(ids, id)
+		add(t, &s, id, host, 0)
+		if s.Current.VideoID != id {
+			t.Fatalf("Current = %+v; want %s", s.Current, id)
+		}
+		mustApply(t, &s, Command{Type: "next", ItemID: s.Current.ID}, host, int64(i+1)*1000)
+	}
+	if len(s.History) != maxHistoryItems {
+		t.Fatalf("len(History) = %d; want %d", len(s.History), maxHistoryItems)
+	}
+	if first, last := s.History[0].VideoID, s.History[len(s.History)-1].VideoID; first != ids[10] || last != ids[len(ids)-1] {
+		t.Errorf("History runs from %s to %s; want %s to %s", first, last, ids[10], ids[len(ids)-1])
 	}
 }

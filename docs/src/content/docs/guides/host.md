@@ -16,9 +16,9 @@ A **participant** is a member of the room in any other Chrome.
 | Remove a song that someone else added | Yes | No |
 | Pause and play your own player | Yes | Yes |
 | Seek, and skip to the next song | Yes | With the host's permission |
-| Reorder Up next | Yes | With the host's permission |
+| Reorder the Queue | Yes | With the host's permission |
 | Give participants the permission | Yes | No |
-| Close the room | Yes | No |
+| End the room | Yes | No |
 
 Pausing and playing affect your own player only, from the popup and from the player of YouTube Music.
 Seeking and skipping reach everyone in the room, from the popup and from the player of YouTube Music: its seek bar and its ⏭ button.
@@ -27,13 +27,15 @@ A participant without the permission who seeks in YouTube Music returns to the r
 ## Let participants control playback
 
 The host turns on Participants can skip and reorder in the popup.
-With the switch on, participants can seek, skip, and reorder Up next.
+With the switch on, participants can seek, skip, and reorder the Queue.
 
-## Close a room
+## End a room
 
-Closing a room deletes it and takes everyone out of it, so the host confirms with a second click:
+Ending a room deletes it, with its Queue, and takes everyone out of it. So the room ends 10 seconds after the host asks, and the host can take it back until then:
 
-1. Click Close room at the top of the popup.
-2. Click Close for all within 4 seconds.
+1. Click End room at the top of the popup.
+2. The popup shows The room ends in 10 seconds, and the button becomes Undo. Click Undo to keep the room as it is.
 
-A host who closes the tab only, without closing the room, leaves the room running, and the room plays Up next in order.
+The others notice nothing during the 10 seconds. The room ends even when the popup is closed in the meantime. A host who closes or reloads the tab of the room before then keeps the room.
+
+A host who closes the tab only, without ending the room, leaves the room running, and the room plays the Queue in order.
