@@ -24,7 +24,8 @@ Each extension computes the position from the timeline, and moves its own player
 - **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now.
 - **A host.** The host decides whether participants may skip, seek, and reorder, and closes the room.
 - **Your own server.** One Go program without dependencies keeps the rooms in JSON files, and answers only the people who know its token.
-- **Japanese and English.** The settings page switches the screens of the extension between the two languages.
+- **A mini window or a side panel.** The button opens the popup in a small window below it, or in the side panel of Chrome, which stays open while you move between tabs.
+- **English and Japanese.** The screens of the extension follow the language of Chrome, and the settings page switches them between the two.
 
 ## Quick start
 

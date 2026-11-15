@@ -9,11 +9,11 @@ description: The parts of Music Together, the timeline of a room, how a player f
 
 Music Together consists of the room server and an extension in the Chrome of each member. The extension has five parts.
 
-- The **popup** (extension/popup/) is the window that the button of the extension opens. It shows the room of a tab, and passes what the member does to that tab. It keeps no state of its own, so closing it changes nothing. Its equalizer moves while the member's own player plays, without measuring the sound.
-- The **settings page** (extension/options/) keeps the language, the address of the room server, and the token in the storage of the extension.
+- The **popup** (extension/popup/) is the page that the button of the extension opens, in a mini window below the button or in the side panel of Chrome, as the settings choose. It shows the room of a tab, and passes what the member does to that tab. It keeps no state of its own, so closing it changes nothing. It follows the tabs while it is open: it connects to the tab in the room when there is one, and otherwise to the YouTube Music tab in front, so the side panel, which stays open, always shows the right tab. Its equalizer moves while the member's own player plays, without measuring the sound.
+- The **settings page** (extension/options/) keeps the language, the way the button opens the popup, the address of the room server, and the token in the storage of the extension.
 - The **room script** (extension/content/room.js) runs in every tab of YouTube Music. Chrome runs it in an **isolated world**: it reads the document of the page, and its JavaScript variables are separate from those of the page. It keeps the connection to the room server, and decides what the player of the tab plays.
 - The **page script** (extension/content/page.js) runs in the JavaScript world of the page of YouTube Music, where the player of YouTube Music is reachable. It drives the player for the room script, and reports what the player does. The two scripts exchange JSON in DOM events, because a DOM event reaches both worlds.
-- The **service worker** (extension/background.js) remembers which tab is in a room, so that the popup finds that tab and a reloaded tab joins its room again. It also shows the number of songs in Up next on the button.
+- The **service worker** (extension/background.js) remembers which tab is in a room, so that the popup finds that tab and a reloaded tab joins its room again. It also shows the number of songs in Up next on the button, and makes the button open the popup in the mini window or in the side panel, as the settings say.
 
 The **room server** (server/) keeps the rooms, takes the commands of the members, and sends every change of a room to every member of it.
 

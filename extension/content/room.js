@@ -115,7 +115,8 @@
   });
 
   // page.js shows a menu item and short notices in YouTube Music, in the
-  // language of the settings. Until the language is set, it is Chrome's.
+  // language of the settings. Until the language is set, it is Chrome's:
+  // Japanese in a Chrome in Japanese, and English in any other.
   async function sendLanguage() {
     let value;
     try {

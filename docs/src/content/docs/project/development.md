@@ -12,10 +12,10 @@ extension/            The Chrome extension
   manifest.json
   i18n.js             The words of the popup and the settings page, in Japanese and English
   _locales/           The description of the extension, in the languages of Chrome
-  background.js       The service worker: which tab is in a room, and the number on the button
+  background.js       The service worker: which tab is in a room, the number on the button, and how the button opens
   content/room.js     The room script: the connection to the room server, and the player following the room
   content/page.js     The page script: drives the player of YouTube Music, and adds the menu item
-  popup/              The popup of the button
+  popup/              The popup of the button, in a mini window or in the side panel
   options/            The settings page
   icons/              The icons: icon.svg, and the PNG files rendered from it
 server/               The room server, in Go with its standard library only

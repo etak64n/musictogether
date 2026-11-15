@@ -1,6 +1,24 @@
 // Remembers which tab is in a room, so that the popup can find that tab and a
 // reloaded tab can rejoin. A browser is in at most one room at a time.
 
+// The toolbar button opens the popup in one of two ways, as the settings page
+// says: a mini window under the button, which is the default, or Chrome's side
+// panel on the right of the window. The side panel is turned off while the
+// mini window is chosen, so that it does not show in Chrome's list of panels.
+async function applyDisplay() {
+  const { display } = await chrome.storage.local.get('display');
+  const panel = display === 'panel';
+  await chrome.action.setPopup({ popup: panel ? '' : 'popup/popup.html' });
+  await chrome.sidePanel.setOptions({ enabled: panel });
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: panel });
+}
+
+applyDisplay().catch(() => {});
+chrome.runtime.onStartup.addListener(() => applyDisplay().catch(() => {}));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.display) applyDisplay().catch(() => {});
+});
+
 async function getRoomTab() {
   const { roomTab } = await chrome.storage.session.get('roomTab');
   return roomTab || null;

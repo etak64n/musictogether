@@ -22,8 +22,14 @@ const message = (code) => t(hasString(code) ? code : 'network');
 
 // The room server and its token come from the settings page. Without them,
 // the popup asks for them in place of creating or joining a room.
-const { server, token } = await chrome.storage.local.get(['server', 'token']);
+const { server, token, display } = await chrome.storage.local.get(['server', 'token', 'display']);
 const configured = Boolean(server && token);
+
+// The same page opens as a mini window under the button or in Chrome's side
+// panel, as the settings say. The side panel fills the width that Chrome gives
+// it, and stays open while the listener moves between tabs.
+const inPanel = display === 'panel';
+document.documentElement.classList.toggle('panel', inPanel);
 
 let tabId = null;
 let port = null;
@@ -61,28 +67,86 @@ async function findTab() {
   return tabs[0] || null;
 }
 
-async function connectToTab() {
+// The popup follows the tab that findTab picks: when the active tab changes,
+// when a tab loads or closes, and when a tab joins or leaves a room. Calls
+// that arrive during one search are folded into one more search after it.
+let refreshing = false;
+let refreshAgain = false;
+
+async function refresh() {
+  if (refreshing) {
+    refreshAgain = true;
+    return;
+  }
+  refreshing = true;
+  try {
+    do {
+      refreshAgain = false;
+      await refreshOnce();
+    } while (refreshAgain);
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function refreshOnce() {
   const tab = await findTab();
   if (!tab) {
+    disconnect();
     tabId = null;
     render();
     return;
   }
+  if (tab.id === tabId && port) return;
+  disconnect();
   tabId = tab.id;
-  const p = chrome.tabs.connect(tab.id, { name: 'popup', frameId: 0 });
+  unreachable = false;
+  // A tab that is still loading has no content script yet; it is connected once it has loaded.
+  if (tab.status !== 'loading') connect(tab.id);
+  render();
+}
+
+function connect(id) {
+  const p = chrome.tabs.connect(id, { name: 'popup', frameId: 0 });
   port = p;
-  p.onMessage.addListener(onMessage);
+  view = null;
+  p.onMessage.addListener((message) => {
+    if (port === p) onMessage(message);
+  });
   p.onDisconnect.addListener(() => {
     // Reading lastError keeps Chrome from logging it as unchecked.
     void chrome.runtime.lastError;
+    if (port !== p) return;
     port = null;
     // A tab that never answered has no content script: it was open before
-    // the extension was installed or updated, or it is still loading.
-    if (view === null) unreachable = true;
-    view = null;
-    render();
+    // the extension was installed or updated.
+    if (view === null) {
+      unreachable = true;
+      render();
+    } else {
+      view = null;
+      refresh();
+    }
   });
 }
+
+function disconnect() {
+  if (port) {
+    const p = port;
+    port = null;
+    p.disconnect();
+  }
+  view = null;
+}
+
+chrome.tabs.onActivated.addListener(() => refresh());
+chrome.tabs.onRemoved.addListener(() => refresh());
+chrome.tabs.onUpdated.addListener((id, info) => {
+  if (info.status === 'complete' || info.url) refresh();
+});
+chrome.storage.session.onChanged.addListener((changes) => {
+  if (changes.roomTab) refresh();
+});
 
 function post(message) {
   if (port) port.postMessage(message);
@@ -778,7 +842,8 @@ $('open-ytm').addEventListener('click', () => {
 
 $('reload-tab').addEventListener('click', () => {
   if (tabId !== null) chrome.tabs.reload(tabId);
-  window.close();
+  // The side panel stays, and connects to the tab once it has loaded.
+  if (!inPanel) window.close();
 });
 
 // --- start ---
@@ -797,4 +862,4 @@ chrome.storage.local.get(['name', 'lastRoomId']).then(({ name, lastRoomId }) => 
 });
 
 requestAnimationFrame(drawViz);
-connectToTab();
+refresh();

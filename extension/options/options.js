@@ -1,6 +1,7 @@
-// The settings page: the language of the extension, and the room server that
-// it uses, with its token. The tab of a room reads the server and the token
-// when it creates or joins a room, so a room keeps the server it began with.
+// The settings page: the language of the extension, how its button opens it,
+// and the room server that it uses, with its token. The tab of a room reads
+// the server and the token when it creates or joins a room, so a room keeps
+// the server it began with.
 
 import { LANGUAGES, loadLanguage, localize, translator } from '../i18n.js';
 
@@ -56,6 +57,12 @@ $('language').addEventListener('change', async () => {
   $('status').hidden = true;
 });
 
+// So does the way the button opens: the service worker applies it.
+$('display').addEventListener('change', async () => {
+  const display = $('display').value === 'panel' ? 'panel' : 'window';
+  await chrome.storage.local.set({ display });
+});
+
 $('server-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const settings = readServer();
@@ -78,6 +85,7 @@ const language = await loadLanguage();
 $('language').value = language;
 applyLanguage(language);
 
-const { server, token } = await chrome.storage.local.get(['server', 'token']);
+const { server, token, display } = await chrome.storage.local.get(['server', 'token', 'display']);
 $('server').value = server || '';
 $('token').value = token || '';
+$('display').value = display === 'panel' ? 'panel' : 'window';

@@ -1,6 +1,7 @@
 // The words of the popup and the settings page, in each language that the
 // extension offers. The language is a setting of the settings page. Until it
-// is set, it follows the language of Chrome.
+// is set, it follows the language of Chrome: Japanese in a Chrome in Japanese,
+// and English in any other.
 
 export const LANGUAGES = ['ja', 'en'];
 
@@ -81,6 +82,9 @@ const STRINGS = {
     serverInvalid: 'サーバーのアドレスが正しくありません',
     enterToken: 'トークンを入れてください',
     tokenAscii: 'トークンは半角の英数字と記号で入れてください',
+    display: '開き方',
+    displayWindow: 'ミニウィンドウ',
+    displayPanel: 'サイドパネル（画面の右）',
   },
   en: {
     // The popup
@@ -158,6 +162,9 @@ const STRINGS = {
     serverInvalid: 'The address of the server is not valid',
     enterToken: 'Enter the token',
     tokenAscii: 'The token has ASCII letters, digits, and symbols only',
+    display: 'Open as',
+    displayWindow: 'Mini window',
+    displayPanel: 'Side panel (on the right)',
   },
 };
 

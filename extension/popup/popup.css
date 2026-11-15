@@ -33,6 +33,12 @@ html {
   width: 320px;
 }
 
+/* In the side panel, the page fills the width that Chrome gives the panel. */
+html.panel {
+  width: auto;
+  min-width: 320px;
+}
+
 body {
   margin: 0;
   background: var(--background);
@@ -633,6 +639,12 @@ main {
 .results {
   max-height: 240px;
   padding: 4px;
+}
+
+/* The side panel is as tall as the window, so its lists grow with it. */
+html.panel #queue,
+html.panel .results {
+  max-height: 45vh;
 }
 
 .list-message {

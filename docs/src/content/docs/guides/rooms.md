@@ -8,11 +8,11 @@ Everyone in a room hears the room's current song at the room's position.
 Each room has a **room ID** of 5 letters and digits, which people enter to join the room.
 The browser that creates a room is the room's **host**, and everyone else in the room is a **participant**. [Host and participants](/musictogether/guides/host/) describes what each of them can do.
 
-The labels on this page are those of the English screens. The settings page of the extension switches the screens between Japanese and English.
+The labels on this page are those of the English screens. The extension shows its screens in the language of Chrome, Japanese or English, until another language is chosen in its settings.
 
 ## Create a room
 
-1. Open YouTube Music, and click the button of Music Together. The popup opens below the button.
+1. Open YouTube Music, and click the button of Music Together. The popup opens in a mini window below the button, or in the side panel on the right of the window, as the settings choose.
 2. Choose Create room, and enter your name in Your name.
 3. Click Create room.
 4. Click the room ID in the popup to copy it, and send it to the people who listen with you.
@@ -58,7 +58,7 @@ Playing again starts the room's current song at the room's current position, whi
 - A room that nobody joins or changes for 7 days is deleted.
 - A song that your account cannot play, as when it is not available in your region, stays silent in your tab only. The others hear it.
 - A member who gets an ad falls behind during the ad, and the player moves to the room's position after it.
-- Closing the popup leaves Chrome in the room.
+- Closing the popup, in the mini window or in the side panel, leaves Chrome in the room.
 
 ## Messages of the popup
 
