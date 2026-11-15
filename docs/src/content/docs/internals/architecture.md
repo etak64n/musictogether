@@ -23,6 +23,7 @@ A member joins a room with a request that stays open: `POST /api/rooms/{id}/stre
 The response is an **event stream**: a response that the server keeps writing to, one event at a time.
 The first event, `hello`, gives the member a session ID. Every later event, `room`, carries the whole room: its queue, its timeline, and its members.
 A member changes the room with a separate request per change, `POST /api/rooms/{id}/commands`, which carries the session ID.
+A request that has no answer within 10 seconds fails, so that the popup shows an error in place of waiting. For an event stream, the limit covers the wait for the response only.
 When the stream breaks, the room script opens a new one after 1, 2, 4, 8, 15, and then every 30 seconds.
 
 The room server sends the whole room in every `room` event, because a room is small: at most 200 songs and 50 connections. A member who misses an event still has the whole room at the next one.

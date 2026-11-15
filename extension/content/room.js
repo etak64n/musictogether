@@ -29,6 +29,7 @@
   const NOTICE_MS = 5000;
   const OPTIMISTIC_MS = 2000;
   const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30]; // seconds
+  const REQUEST_TIMEOUT_MS = 10000;
   const CLOCK_SAMPLES = 5;
   const CLOCK_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -149,7 +150,16 @@
 
   const authorization = (server) => `Bearer ${server.token}`;
 
+  const isLoopback = (server) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]?/.test(server.url);
+
+  // A request that has no answer within REQUEST_TIMEOUT_MS fails as "timeout",
+  // so that the popup never waits forever. Chrome holds a request to this
+  // computer while it asks in the tab whether YouTube Music may reach it, so a
+  // server on this computer gets a message that says so. The limit covers the
+  // wait for the answer only: the body of an event stream can last for hours.
   async function request(server, path, body, signal) {
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
     let response;
     try {
       response = await fetch(server.url + path, {
@@ -157,11 +167,14 @@
         headers: { 'Content-Type': 'application/json', Authorization: authorization(server) },
         body: JSON.stringify(body),
         cache: 'no-store',
-        signal,
+        signal: signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal,
       });
     } catch (e) {
+      if (timeout.signal.aborted) throw new ServerError(isLoopback(server) ? 'timeout_local' : 'timeout');
       if (e.name === 'AbortError') throw e;
       throw new ServerError('network');
+    } finally {
+      clearTimeout(timer);
     }
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -179,6 +192,7 @@
       const response = await fetch(server.url + '/api/time', {
         headers: { Authorization: authorization(server) },
         cache: 'no-store',
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!response.ok) throw new ServerError('network');
       const { now } = await response.json();
@@ -208,7 +222,7 @@
     busy = true;
     error = null;
     publish();
-    const server = await loadServer();
+    const server = await loadServer().catch(() => null);
     if (!server) {
       busy = false;
       error = 'no_server';
@@ -234,7 +248,7 @@
     busy = true;
     error = null;
     publish();
-    const server = await loadServer();
+    const server = await loadServer().catch(() => null);
     if (!server) {
       busy = false;
       error = 'no_server';

@@ -71,3 +71,5 @@ Playing again starts the room's current song at the room's current position, whi
 | This account cannot play this song | Your account cannot play the room's current song, as when the song is not available in your region. The others hear it. |
 | The token is wrong | The token in the settings differs from the room server's. Ask the person who runs the server for the token, and enter it in the settings again. |
 | Cannot reach the server | Chrome cannot reach the address of the server in the settings. Check the address, and ask the person who runs the server whether it is running. |
+| The server does not answer. Check the address of the server | The server gave no answer within 10 seconds. Check the address in the settings, and ask the person who runs the server whether it is running. |
+| The server does not answer. If Chrome asks in the YouTube Music tab to let it access this computer, allow it | Chrome holds a request to a room server on the same computer until you allow YouTube Music to reach this computer. Look for the question of Chrome in the YouTube Music tab, and allow it. |
