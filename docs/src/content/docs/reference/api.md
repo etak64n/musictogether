@@ -61,7 +61,7 @@ An error has a status and a body with a reason.
 `GET /` returns the name and version of the server as plain text. It needs no token.
 
 ```text
-Music Together server 0.3.4
+Music Together server 0.3.5
 ```
 
 ## Server clock
