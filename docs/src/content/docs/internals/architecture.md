@@ -101,9 +101,9 @@ YouTube Music installed as an app shows its page in a display mode other than `b
 
 The popup takes links that are dropped on the room: a song (`watch?v=`), a playlist (`playlist?list=`), or an album (`browse/MPREb_…`). It passes them to the tab. The page script looks up a song or a playlist as the ⋮ menu does. For an album, it first asks YouTube Music for the album's page, which names the playlist of the album's songs.
 
-## The playlist of songs that played
+## The playlist of Main
 
-The popup asks the tab in the room for the playlist. The room script fetches the songs that played from the room server (`POST /api/rooms/{id}/history`), adds the song that plays, and keeps each song once. The page script then makes a private playlist in YouTube Music with the request that YouTube Music itself sends for a new playlist, so the playlist belongs to the account that is signed in to YouTube Music.
+The popup asks the tab in the room for the playlist. The room script fetches the songs that played from the room server (`POST /api/rooms/{id}/history`), adds the song that plays and the songs that wait in Main, and keeps each song once. The page script then makes a private playlist in YouTube Music with the request that YouTube Music itself sends for a new playlist, so the playlist belongs to the account that is signed in to YouTube Music.
 
 ## Storage of rooms
 

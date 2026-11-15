@@ -500,14 +500,21 @@
   }
 
   // A private playlist of the listener's own YouTube Music, made with the
-  // request that YouTube Music itself sends to make a new playlist.
+  // request that YouTube Music itself sends to make a new playlist. A request
+  // without an answer within PLAYLIST_TIMEOUT_MS counts as failed.
+  const PLAYLIST_TIMEOUT_MS = 20000;
+
   async function createPlaylist({ reqId, title, description, videoIds }) {
     let playlistId = '';
     try {
-      const response = await app.networkManager.fetch('/playlist/create', { title, description, privacyStatus: 'PRIVATE', videoIds });
+      const response = await Promise.race([
+        app.networkManager.fetch('/playlist/create', { title, description, privacyStatus: 'PRIVATE', videoIds }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('no answer')), PLAYLIST_TIMEOUT_MS)),
+      ]);
       if (response && typeof response.playlistId === 'string') playlistId = response.playlistId;
-    } catch {
-      // Reported as a failure.
+      else console.warn('[Music Together] The new playlist has no ID:', response);
+    } catch (error) {
+      console.warn('[Music Together] YouTube Music did not make the playlist:', error);
     }
     send({ type: 'playlist-created', reqId, playlistId });
   }

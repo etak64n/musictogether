@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -277,6 +278,39 @@ func TestTheRoomSendsTheLatestSongsThatPlayed(t *testing.T) {
 	}
 	if resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/history", map[string]any{"sessionId": "not-a-session"}); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("history without a session: status %d, body %v; want 403", resp.StatusCode, body)
+	}
+}
+
+func TestMembersHearOfTheLatestRelease(t *testing.T) {
+	const page = "https://github.com/etak64n/musictogether/releases/tag/v9.8.7"
+	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"tag_name":"v9.8.7","html_url":%q}`, page)
+	}))
+	t.Cleanup(feed.Close)
+	srv, hub := newTestServer(t)
+	roomID := createRoom(t, srv, "client-neko")
+	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
+	next(t, neko)
+	next(t, neko)
+
+	// A member in a room hears of the release as soon as the server finds it.
+	hub.checkRelease(context.Background(), feed.Client(), feed.URL)
+	if ev := next(t, neko); ev.name != "release" || ev.data["version"] != "9.8.7" || ev.data["url"] != page {
+		t.Errorf("event %s %v; want the release 9.8.7", ev.name, ev.data)
+	}
+	// A member who joins later hears of it right after hello.
+	inu := openStream(t, srv, roomID, "client-inu", "いぬ")
+	next(t, inu)
+	if ev := next(t, inu); ev.name != "release" || ev.data["version"] != "9.8.7" {
+		t.Errorf("event %s %v; want the release after hello", ev.name, ev.data)
+	}
+	next(t, neko) // いぬ joined
+	// The same release is told once.
+	hub.checkRelease(context.Background(), feed.Client(), feed.URL)
+	select {
+	case ev := <-neko:
+		t.Errorf("event %s %v after the same release; want none", ev.name, ev.data)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 

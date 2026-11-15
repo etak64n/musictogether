@@ -23,8 +23,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Chrome updates this extension only when someone replaces its folder, so the
-// extension asks GitHub once a day for the latest release. A newer version is
-// kept as "update" for the popup, which shows a notice with a link to it.
+// extension learns of new releases: from the room server, which tells the
+// members of a room as soon as it finds one, and from GitHub, which the
+// extension asks once a day. A newer version is kept as "update" for the
+// popup, which shows a notice with a link to it.
 const LATEST_RELEASE = 'https://api.github.com/repos/etak64n/musictogether/releases/latest';
 const RELEASES_PAGE = 'https://github.com/etak64n/musictogether/releases/';
 const UPDATE_ALARM = 'check-update';
@@ -44,15 +46,20 @@ async function checkUpdate() {
   const response = await fetch(LATEST_RELEASE, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
   if (!response.ok) return;
   const release = await response.json();
-  const version = String(release.tag_name || '').replace(/^v/, '');
-  if (!/^\d+(\.\d+)*$/.test(version)) return;
+  await noteRelease(String(release.tag_name || '').replace(/^v/, ''), release.html_url);
+}
+
+// Keeps a release that is newer than this extension, and forgets the notice
+// once the extension is as new. The link leads to the release on GitHub, and
+// to the list of releases otherwise, whoever named it.
+async function noteRelease(version, url) {
+  if (typeof version !== 'string' || !/^\d+(\.\d+)*$/.test(version)) return;
   if (!isNewer(version, chrome.runtime.getManifest().version)) {
     await chrome.storage.local.remove('update');
     return;
   }
-  // The link leads to the release on GitHub, and to the list of releases otherwise.
-  const url = typeof release.html_url === 'string' && release.html_url.startsWith(RELEASES_PAGE) ? release.html_url : RELEASES_PAGE;
-  await chrome.storage.local.set({ update: { version, url } });
+  const link = typeof url === 'string' && url.startsWith(RELEASES_PAGE) ? url : RELEASES_PAGE;
+  await chrome.storage.local.set({ update: { version, url: link } });
 }
 
 // The alarm is made once, so that the service worker, which Chrome starts
@@ -150,6 +157,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'app-window') {
     chrome.action.setPopup({ tabId, popup: MINI_WINDOW }).catch(() => {});
     chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+    return false;
+  }
+
+  if (message.type === 'release') {
+    noteRelease(message.version, message.url).catch(() => {});
     return false;
   }
 

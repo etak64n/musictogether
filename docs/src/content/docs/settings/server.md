@@ -14,8 +14,9 @@ A missing or wrong value stops the server when it starts, with a line for each s
 | `DATA_DIR` | Yes | The directory for the rooms. The server creates `rooms/` in it, with one JSON file per room. | `/data` |
 | `LOG_FORMAT` | Yes | The format of the logs: `json` for one JSON object per line, or `text` for tab-separated columns. | `json` |
 | `TOKEN` | Yes | The token that the extension sends with every request. At least 8 ASCII letters, digits, or symbols, without spaces. | `a-long-token-of-your-own` |
+| `RELEASES_URL` | No | The HTTPS address of the latest release in the GitHub API. The server asks it for the latest release when it starts and every 10 minutes after, and tells every member of every room of it, so that the extension shows a newer version at once. Without it, the server makes no request to GitHub. | `https://api.github.com/repos/etak64n/musictogether/releases/latest` |
 
-server/compose.yaml sets `ADDR`, `DATA_DIR`, and `LOG_FORMAT`, and reads `TOKEN` from the file .env next to it.
+server/compose.yaml sets `ADDR`, `DATA_DIR`, `LOG_FORMAT`, and `RELEASES_URL`, and reads `TOKEN` from the file .env next to it.
 In its container, the server listens on `0.0.0.0:8080`, and Docker publishes the port on 127.0.0.1 of the machine only.
 
 ## Token
@@ -45,6 +46,7 @@ The other fields depend on the event:
 - `Server started` has `addr`, `version`, and `count`, the number of rooms read from `DATA_DIR`.
 - `Room created` and `Room closed` have `count`, the number of rooms on the server. `Unused rooms deleted` has `count`, the number of rooms deleted.
 - `Member joined` and `Member left` have `count`, the number of connections in the room.
+- `Release found` has `releaseVersion`, the version of the latest release that the server found on GitHub. `Release check failed`, a warning, has `errorType` and `errorMessage`; the server tries again 10 minutes later.
 - Errors have `errorType` and `errorMessage`.
 
 The names of members are not written to the logs.

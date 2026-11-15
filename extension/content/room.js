@@ -391,6 +391,9 @@
     if (name === 'hello') onHello(c, payload);
     else if (name === 'room') onRoom(payload);
     else if (name === 'closed') endRoom(c, isHost() ? null : 'room_closed');
+    // The room server tells of the latest release of Music Together as soon as
+    // it finds one, and the service worker keeps it for the popup's notice.
+    else if (name === 'release') callChrome(() => chrome.runtime.sendMessage({ type: 'release', version: payload.version, url: payload.url }));
   }
 
   function onHello(c, hello) {
@@ -985,10 +988,10 @@
 
   // --- saving the songs as a playlist ---
 
-  // The songs that played in the room become a playlist of this listener's own
-  // YouTube Music: every song that the room server keeps, oldest first, and
-  // the song that plays, each once. page.js makes the playlist, and the popup
-  // that asked hears how it went.
+  // Main becomes a playlist of this listener's own YouTube Music: every song
+  // that played that the room server keeps, oldest first, the song that plays,
+  // and the songs that wait in Main, each once. Standby stays out. page.js
+  // makes the playlist, and the popup that asked hears how it went.
   const playlists = new Map(); // our request ID -> { reply, title }
   let playlistSeq = 0;
 
@@ -1013,7 +1016,7 @@
       // A server before this request has only the songs that the room sends.
       history = room.history;
     }
-    const songs = [...(Array.isArray(history) ? history : []), ...(room.current ? [room.current] : [])];
+    const songs = [...(Array.isArray(history) ? history : []), ...(room.current ? [room.current] : []), ...room.queue];
     const videoIds = [...new Set(songs.map((item) => item.videoId))];
     if (videoIds.length === 0) {
       reply({ error: 'nothing' });

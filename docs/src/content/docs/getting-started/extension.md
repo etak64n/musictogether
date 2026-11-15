@@ -58,7 +58,11 @@ The extension keeps the settings in this Chrome, and reads the server and the to
 
 ## Update the extension
 
-The extension asks GitHub for its latest release once a day, with an ordinary request to the API of GitHub that carries no settings.
+The extension learns of a newer release in two ways:
+
+- The room server that sets `RELEASES_URL` asks GitHub for the latest release every 10 minutes, and tells everyone in a room as soon as a newer one is out.
+- The extension asks GitHub for its latest release once a day, with an ordinary request to the API of GitHub that carries no settings.
+
 When a newer version is out, the popup shows Version X.Y.Z is available at its top, and a click on it opens the page of the release.
 Chrome does not replace the extension folder by itself, so the update takes these steps:
 

@@ -60,9 +60,9 @@ A song added to a room where nothing plays starts at once.
 Each song shows the name of the person who added it, at the end of the line of its artists.
 While Chrome is in a room, the button of Music Together shows the number of songs waiting in Main, up to 99.
 
-## Save the songs as a playlist
+## Save Main as a playlist
 
-The button with lines and a plus, at the top of the panel Main, saves the songs that played in the room as a private playlist of your YouTube Music: up to the last 500 of them, oldest first, and the song that plays, each once. The playlist is named Music Together with the date and the time.
+The button with lines and a plus, at the top of the panel Main, saves Main as a private playlist of your YouTube Music: the songs that played, up to the last 500 of them, oldest first, then the song that plays, then the songs that wait in Main, each once. Standby stays out. The playlist is named Music Together with the date and the time.
 When the playlist is made, the popup shows a message with Open, which opens the playlist in a new tab.
 
 ## Open the window on top

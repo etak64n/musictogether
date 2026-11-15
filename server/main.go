@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -51,6 +52,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go hub.RunCleanup(ctx)
+	if cfg.releasesURL != "" {
+		go hub.WatchReleases(ctx, cfg.releasesURL)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.addr,
@@ -80,21 +84,25 @@ func run() error {
 }
 
 type config struct {
-	addr      string
-	dataDir   string
-	logFormat string
-	token     string
+	addr        string
+	dataDir     string
+	logFormat   string
+	token       string
+	releasesURL string
 }
 
-// loadConfig reads the settings from environment variables. Every one of them
-// is required, so the server never runs on a value that nobody wrote down. It
+// loadConfig reads the settings from environment variables. Every setting that
+// the server needs is required, so the server never runs on a value that
+// nobody wrote down. RELEASES_URL turns on telling the members of new
+// releases, and the server asks nothing of GitHub without it. loadConfig
 // reports every setting that is missing or wrong at once.
 func loadConfig() (config, error) {
 	cfg := config{
-		addr:      os.Getenv("ADDR"),
-		dataDir:   os.Getenv("DATA_DIR"),
-		logFormat: os.Getenv("LOG_FORMAT"),
-		token:     os.Getenv("TOKEN"),
+		addr:        os.Getenv("ADDR"),
+		dataDir:     os.Getenv("DATA_DIR"),
+		logFormat:   os.Getenv("LOG_FORMAT"),
+		token:       os.Getenv("TOKEN"),
+		releasesURL: os.Getenv("RELEASES_URL"),
 	}
 	var problems []error
 	if _, _, err := net.SplitHostPort(cfg.addr); err != nil {
@@ -108,6 +116,11 @@ func loadConfig() (config, error) {
 	}
 	if !validToken(cfg.token) {
 		problems = append(problems, fmt.Errorf("Please set TOKEN to the token that members enter in the extension: at least %d ASCII letters, digits or symbols, without spaces.", minTokenLength))
+	}
+	if cfg.releasesURL != "" {
+		if u, err := url.Parse(cfg.releasesURL); err != nil || u.Scheme != "https" || u.Host == "" {
+			problems = append(problems, errors.New("Please set RELEASES_URL to the HTTPS address of the latest release in the GitHub API, such as https://api.github.com/repos/etak64n/musictogether/releases/latest, or leave it out."))
+		}
 	}
 	return cfg, errors.Join(problems...)
 }

@@ -13,6 +13,9 @@ services:
       DATA_DIR: /data
       LOG_FORMAT: json
       TOKEN: ${TOKEN:?Please copy .env.example to .env and set TOKEN in it}
+      # The server asks GitHub for the latest release every 10 minutes, and
+      # tells the members of every room when a newer one is out.
+      RELEASES_URL: https://api.github.com/repos/etak64n/musictogether/releases/latest
     volumes:
       - rooms:/data
     ports:

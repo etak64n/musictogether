@@ -1057,6 +1057,12 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   pointer-events: none;
 }
 
+/* An open Standby without songs keeps the room of one song, where a song
+   dragged from Main or from YouTube Music can be dropped. */
+#standby:empty {
+  min-height: 41px;
+}
+
 /* A song or an album dragged from YouTube Music over Standby goes there. */
 #standby-section.drop-target {
   border-radius: var(--radius);

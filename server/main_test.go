@@ -6,7 +6,7 @@ import (
 )
 
 func TestConfigNeedsEverySetting(t *testing.T) {
-	for _, name := range []string{"ADDR", "DATA_DIR", "LOG_FORMAT", "TOKEN"} {
+	for _, name := range []string{"ADDR", "DATA_DIR", "LOG_FORMAT", "TOKEN", "RELEASES_URL"} {
 		t.Setenv(name, "")
 	}
 	_, err := loadConfig()
@@ -48,6 +48,31 @@ func TestConfigNeedsATokenThatTheExtensionCanSend(t *testing.T) {
 		}
 		if !tc.ok && (err == nil || !strings.Contains(err.Error(), "TOKEN")) {
 			t.Errorf("TOKEN %q: error %v; want it refused", tc.token, err)
+		}
+	}
+}
+
+func TestReleasesURLMayBeLeftOut(t *testing.T) {
+	t.Setenv("ADDR", "127.0.0.1:8080")
+	t.Setenv("DATA_DIR", t.TempDir())
+	t.Setenv("LOG_FORMAT", "json")
+	t.Setenv("TOKEN", "listen-2gether!")
+	for _, tc := range []struct {
+		value string
+		ok    bool
+	}{
+		{"", true},
+		{"https://api.github.com/repos/etak64n/musictogether/releases/latest", true},
+		{"http://api.github.com/repos/etak64n/musictogether/releases/latest", false}, // not HTTPS
+		{"api.github.com/repos/etak64n/musictogether/releases/latest", false},        // no scheme
+	} {
+		t.Setenv("RELEASES_URL", tc.value)
+		cfg, err := loadConfig()
+		if tc.ok && (err != nil || cfg.releasesURL != tc.value) {
+			t.Errorf("RELEASES_URL %q: got %+v, %v; want it accepted", tc.value, cfg, err)
+		}
+		if !tc.ok && (err == nil || !strings.HasPrefix(err.Error(), "Please set RELEASES_URL ")) {
+			t.Errorf("RELEASES_URL %q: error %v; want it refused", tc.value, err)
 		}
 	}
 }

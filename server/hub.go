@@ -52,6 +52,9 @@ type Hub struct {
 	now   func() time.Time
 
 	sessions atomic.Int64
+	// release is the latest release of Music Together that the server found,
+	// or nil while it knows none.
+	release atomic.Pointer[release]
 
 	mu        sync.Mutex // guards rooms and creations; never taken while a room is locked
 	rooms     map[string]*Room
@@ -212,6 +215,9 @@ func (h *Hub) Join(roomID, clientID, name string, listening bool, log *slog.Logg
 	}
 	if hello, ok := h.frame("hello", helloEvent{SessionID: sess.ID, MemberID: sess.MemberID}); ok {
 		sess.out <- hello
+	}
+	if latest, ok := h.releaseFrame(); ok {
+		sess.out <- latest
 	}
 	h.broadcastLocked(room, now)
 	log.Info("Member joined", "count", len(room.sessions))

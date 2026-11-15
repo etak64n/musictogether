@@ -30,13 +30,24 @@ let configured = Boolean(server && token);
 let settingsOpen = location.hash === '#settings';
 if (settingsOpen) history.replaceState(null, '', location.pathname + location.search);
 
-// A newer release, which the service worker found on GitHub, is shown above
-// everything else until the extension is updated.
-if (update && update.version && update.url) {
-  $('update-text').textContent = t('updateAvailable', { version: update.version });
-  $('update').hidden = false;
-  $('update').addEventListener('click', () => chrome.tabs.create({ url: update.url }));
+// A newer release, which the room server or GitHub told of, is shown above
+// everything else until the extension is updated, also when it comes while the
+// popup is open.
+let updateUrl = '';
+function showUpdate(found) {
+  const known = Boolean(found && found.version && found.url);
+  $('update').hidden = !known;
+  if (!known) return;
+  updateUrl = found.url;
+  $('update-text').textContent = t('updateAvailable', { version: found.version });
 }
+$('update').addEventListener('click', () => {
+  if (updateUrl) chrome.tabs.create({ url: updateUrl });
+});
+showUpdate(update);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.update) showUpdate(changes.update.newValue);
+});
 
 // The same page opens as a mini window under the button or in Chrome's side
 // panel, as the settings say. The side panel fills the width that Chrome gives
@@ -284,7 +295,7 @@ function renderRoom() {
   renderQueue(queue);
   // A server older than the standby queue sends none.
   renderStandby(room && room.standby ? room.standby : []);
-  $('save-playlist').hidden = history.length === 0 && !(room && room.current);
+  $('save-playlist').hidden = history.length === 0 && !(room && room.current) && queue.length === 0;
   // When another song has finished, the queue scrolls so that the last one that
   // played is at its top, with the song that plays and the songs that wait below
   // it. The rows below must be in place first, or there is nothing to scroll.
@@ -1117,9 +1128,13 @@ $('room').addEventListener('drop', (event) => {
 
 // --- saving the songs as a playlist ---
 
-// The songs that played in the room become a private playlist of this
-// listener's YouTube Music, named after the moment it is made.
+// Main becomes a private playlist of this listener's YouTube Music: the songs
+// that played, the song that plays, and the songs that wait, named after the
+// moment it is made. Without an answer within PLAYLIST_WAIT_MS, the button
+// comes back and the popup tells of the failure.
+const PLAYLIST_WAIT_MS = 30000;
 let playlistSeq = 0;
+let playlistTimer = 0;
 
 function stamp(date) {
   const two = (n) => String(n).padStart(2, '0');
@@ -1128,12 +1143,17 @@ function stamp(date) {
 
 $('save-playlist').addEventListener('click', () => {
   playlistSeq += 1;
+  const seq = playlistSeq;
   $('save-playlist').disabled = true;
+  clearTimeout(playlistTimer);
+  playlistTimer = setTimeout(() => onPlaylistResult({ reqId: seq, error: 'failed' }), PLAYLIST_WAIT_MS);
   post({ type: 'save-playlist', reqId: playlistSeq, title: t('playlistTitle', { date: stamp(new Date()) }), description: t('playlistDescription') });
 });
 
 function onPlaylistResult(message) {
   if (message.reqId !== playlistSeq) return;
+  playlistSeq += 1;
+  clearTimeout(playlistTimer);
   $('save-playlist').disabled = false;
   if (message.error) {
     toast(t(message.error === 'nothing' ? 'playlistNothing' : 'playlistFailed'));

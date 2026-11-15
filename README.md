@@ -22,7 +22,7 @@ Each extension computes the position from the timeline, and moves its own player
 
 - **Invite links.** The host copies a link that opens YouTube Music and joins the room.
 - **Two shared queues.** Everyone in a room adds songs to Main, which plays first, or to Standby, which plays once Main is empty and mixes the songs that it gets at random places. Songs come from the search of the popup, from the ⋮ menu of a song, an album, or a playlist in YouTube Music, or by dragging one from YouTube Music to a place in the queues. The queues are reordered by dragging, and the songs that have played stay at the top in gray, ready to be added again.
-- **The songs that played, as a playlist.** The songs that played in a room are saved as a private playlist of your YouTube Music with one click.
+- **Main as a playlist.** The songs of Main, those that played and those that wait, are saved as a private playlist of your YouTube Music with one click.
 - **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now. Everyone sees who is listening.
 - **A host.** The host decides whether participants may skip, seek, and reorder, and ends the room.
 - **Your own server.** One Go program without dependencies keeps the rooms in JSON files, and answers only the people who know its token.
@@ -52,7 +52,7 @@ Open YouTube Music, create a room in the popup, and send its invite link to your
 
 ## Configuration
 
-The room server reads four environment variables, all required:
+The room server reads these environment variables. The first four are required:
 
 | Variable | Description | Example |
 | --- | --- | --- |
@@ -60,6 +60,7 @@ The room server reads four environment variables, all required:
 | `DATA_DIR` | The directory that keeps the rooms | `/data` |
 | `LOG_FORMAT` | The format of the logs: `json` or `text` | `json` |
 | `TOKEN` | The token that the extension sends: at least 8 ASCII letters, digits, or symbols | `a-long-token-of-your-own` |
+| `RELEASES_URL` | Optional. The latest release in the GitHub API, which the server checks every 10 minutes to tell the members of every room of a newer one | `https://api.github.com/repos/etak64n/musictogether/releases/latest` |
 
 [Server configuration](https://etak64n.github.io/musictogether/settings/server/) describes the logs and the limits.
 

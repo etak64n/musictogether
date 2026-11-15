@@ -111,6 +111,7 @@ The stream carries these events:
 | `hello` | First | The session of this connection |
 | `room` | After `hello`, and after every change of the room | The whole room |
 | `closed` | When the host ends the room | `{}`. The stream ends after it. |
+| `release` | After `hello`, and when the server finds a newer release, while `RELEASES_URL` is set | The latest release: `version`, such as `0.3.6`, and `url`, the address of its page |
 
 ```text
 event: hello
