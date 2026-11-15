@@ -123,10 +123,12 @@ h2 {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* A choice of a few options, side by side. The chosen one takes the accent. */
+/* A choice of a few options, side by side in columns of the same width. The
+   chosen one takes the accent. */
 .radios {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   gap: 8px;
 }
 
