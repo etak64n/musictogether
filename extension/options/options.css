@@ -95,7 +95,7 @@ h2 {
   gap: 6px;
 }
 
-.field span {
+.field > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
@@ -106,7 +106,7 @@ h2 {
   font-size: 12px;
 }
 
-.field input,
+.field input:not([type="radio"]),
 .field select {
   min-height: 36px;
   padding: 0 10px;
@@ -116,11 +116,46 @@ h2 {
   font-weight: 700;
 }
 
-.field input:focus,
+.field input:not([type="radio"]):focus,
 .field select:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* A choice of a few options, side by side. The chosen one takes the accent. */
+.radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.radio:hover {
+  border-color: var(--accent);
+}
+
+.radio:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.radio input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .actions {

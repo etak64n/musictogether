@@ -49,6 +49,7 @@ const STRINGS = {
     roomIdFormat: 'ルーム ID は英数字 5 文字です',
     copied: 'ルーム ID をコピーしました',
     copyFailed: 'コピーできませんでした',
+    updateAvailable: '新しい版 v{version} があります',
     // What the room server or the tab reports
     room_not_found: 'ルームが見つかりません',
     room_gone: 'ルームがなくなりました',
@@ -78,13 +79,11 @@ const STRINGS = {
     save: '保存',
     saved: '保存しました',
     enterServer: 'サーバーのアドレスを入れてください',
-    serverHttps: 'サーバーのアドレスは https:// で始めてください',
+    serverHttps: 'サーバーのアドレスは https:// で始めてください（この PC のサーバーなら http://localhost も使えます）',
     serverInvalid: 'サーバーのアドレスが正しくありません',
     enterToken: 'トークンを入れてください',
     tokenAscii: 'トークンは半角の英数字と記号で入れてください',
     display: '開き方',
-    displayWindow: 'ミニウィンドウ',
-    displayPanel: 'サイドパネル（画面の右）',
   },
   en: {
     // The popup
@@ -129,6 +128,7 @@ const STRINGS = {
     roomIdFormat: 'A room ID has 5 letters and digits',
     copied: 'Copied the room ID',
     copyFailed: 'Could not copy',
+    updateAvailable: 'Version {version} is available',
     // What the room server or the tab reports
     room_not_found: 'No room has this ID',
     room_gone: 'The room is gone',
@@ -158,13 +158,11 @@ const STRINGS = {
     save: 'Save',
     saved: 'Saved',
     enterServer: 'Enter the address of the server',
-    serverHttps: 'The address of the server starts with https://',
+    serverHttps: 'The address of the server starts with https://, or with http://localhost for a server on this computer',
     serverInvalid: 'The address of the server is not valid',
     enterToken: 'Enter the token',
     tokenAscii: 'The token has ASCII letters, digits, and symbols only',
     display: 'Open as',
-    displayWindow: 'Mini window',
-    displayPanel: 'Side panel (on the right)',
   },
 };
 

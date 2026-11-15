@@ -29,18 +29,23 @@ function refuse(input, key) {
   return null;
 }
 
+// Chrome lets the page of YouTube Music, which is HTTPS, reach a server over
+// HTTP only on this computer, so http:// is taken for these hosts alone.
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
 // The address is kept without a trailing slash, as the tab adds the paths of
 // the API to it. The token travels in an HTTP header, which takes ASCII only.
 function readServer() {
   const text = $('server').value.trim();
   if (!text) return refuse($('server'), 'enterServer');
-  if (!/^https:\/\//i.test(text)) return refuse($('server'), 'serverHttps');
+  if (!/^https?:\/\//i.test(text)) return refuse($('server'), 'serverHttps');
   let url;
   try {
     url = new URL(text);
   } catch {
     return refuse($('server'), 'serverInvalid');
   }
+  if (url.protocol === 'http:' && !LOOPBACK_HOSTS.includes(url.hostname)) return refuse($('server'), 'serverHttps');
   if (url.username || url.password || url.search || url.hash) return refuse($('server'), 'serverInvalid');
   const token = $('token').value.trim();
   if (!token) return refuse($('token'), 'enterToken');
@@ -58,10 +63,13 @@ $('language').addEventListener('change', async () => {
 });
 
 // So does the way the button opens: the service worker applies it.
-$('display').addEventListener('change', async () => {
-  const display = $('display').value === 'panel' ? 'panel' : 'window';
-  await chrome.storage.local.set({ display });
-});
+const displayRadios = document.querySelectorAll('input[name="display"]');
+for (const radio of displayRadios) {
+  radio.addEventListener('change', async () => {
+    if (!radio.checked) return;
+    await chrome.storage.local.set({ display: radio.value === 'panel' ? 'panel' : 'window' });
+  });
+}
 
 $('server-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -88,4 +96,5 @@ applyLanguage(language);
 const { server, token, display } = await chrome.storage.local.get(['server', 'token', 'display']);
 $('server').value = server || '';
 $('token').value = token || '';
-$('display').value = display === 'panel' ? 'panel' : 'window';
+const shown = display === 'panel' ? 'panel' : 'window';
+for (const radio of displayRadios) radio.checked = radio.value === shown;

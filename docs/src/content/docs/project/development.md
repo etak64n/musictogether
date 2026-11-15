@@ -40,7 +40,7 @@ cd server
 ADDR=127.0.0.1:8080 DATA_DIR=./data LOG_FORMAT=text TOKEN=a-local-token go run .
 ```
 
-The extension reaches a room server over HTTPS only, so a room server on a development machine needs a tunnel or a reverse proxy with a certificate, as [Run a room server](/musictogether/getting-started/server/) describes.
+The extension reaches this room server at `http://127.0.0.1:8080`, with the token `a-local-token`: Chrome lets an HTTPS page reach `localhost` and `127.0.0.1` over HTTP, so the settings take these two hosts with `http://`. Every other room server needs an HTTPS address, as [Run a room server](/musictogether/getting-started/server/) describes.
 
 ## Tests
 

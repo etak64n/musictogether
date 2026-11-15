@@ -19,6 +19,52 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.display) applyDisplay().catch(() => {});
 });
 
+// Chrome updates this extension only when someone replaces its folder, so the
+// extension asks GitHub once a day for the latest release. A newer version is
+// kept as "update" for the popup, which shows a notice with a link to it.
+const LATEST_RELEASE = 'https://api.github.com/repos/etak64n/musictogether/releases/latest';
+const RELEASES_PAGE = 'https://github.com/etak64n/musictogether/releases/';
+const UPDATE_ALARM = 'check-update';
+
+// Whether version a, such as 0.10.0, comes after version b, such as 0.9.1.
+function isNewer(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const difference = (pa[i] || 0) - (pb[i] || 0);
+    if (difference !== 0) return difference > 0;
+  }
+  return false;
+}
+
+async function checkUpdate() {
+  const response = await fetch(LATEST_RELEASE, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+  if (!response.ok) return;
+  const release = await response.json();
+  const version = String(release.tag_name || '').replace(/^v/, '');
+  if (!/^\d+(\.\d+)*$/.test(version)) return;
+  if (!isNewer(version, chrome.runtime.getManifest().version)) {
+    await chrome.storage.local.remove('update');
+    return;
+  }
+  // The link leads to the release on GitHub, and to the list of releases otherwise.
+  const url = typeof release.html_url === 'string' && release.html_url.startsWith(RELEASES_PAGE) ? release.html_url : RELEASES_PAGE;
+  await chrome.storage.local.set({ update: { version, url } });
+}
+
+// The alarm is made once, so that the service worker, which Chrome starts
+// again and again, does not move the next check each time it starts.
+chrome.alarms.get(UPDATE_ALARM).then((alarm) => {
+  if (!alarm) chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === UPDATE_ALARM) checkUpdate().catch(() => {});
+});
+// A new version of the extension forgets the notice of the old one, and looks again.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.remove('update').then(() => checkUpdate()).catch(() => {});
+});
+
 async function getRoomTab() {
   const { roomTab } = await chrome.storage.session.get('roomTab');
   return roomTab || null;

@@ -22,8 +22,16 @@ const message = (code) => t(hasString(code) ? code : 'network');
 
 // The room server and its token come from the settings page. Without them,
 // the popup asks for them in place of creating or joining a room.
-const { server, token, display } = await chrome.storage.local.get(['server', 'token', 'display']);
+const { server, token, display, update } = await chrome.storage.local.get(['server', 'token', 'display', 'update']);
 const configured = Boolean(server && token);
+
+// A newer release, which the service worker found on GitHub, is shown above
+// everything else until the extension is updated.
+if (update && update.version && update.url) {
+  $('update-text').textContent = t('updateAvailable', { version: update.version });
+  $('update').hidden = false;
+  $('update').addEventListener('click', () => chrome.tabs.create({ url: update.url }));
+}
 
 // The same page opens as a mini window under the button or in Chrome's side
 // panel, as the settings say. The side panel fills the width that Chrome gives

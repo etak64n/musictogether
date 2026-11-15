@@ -138,10 +138,11 @@
   // --- server ---
 
   // The room server from the settings page: its address, which starts with
-  // https://, and its token. A room keeps the server it was joined on.
+  // https://, or http:// for a server on this computer, and its token. A room
+  // keeps the server it was joined on.
   async function loadServer() {
     const { server, token } = await chrome.storage.local.get(['server', 'token']);
-    if (typeof server !== 'string' || !server.startsWith('https://')) return null;
+    if (typeof server !== 'string' || !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]?)/.test(server)) return null;
     if (typeof token !== 'string' || !token) return null;
     return { url: server, token };
   }

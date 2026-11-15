@@ -143,6 +143,35 @@ main {
   padding: 0 10px 10px;
 }
 
+/* A newer release on GitHub: a quiet line above everything else, which opens
+   the page of the release. */
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.update:hover {
+  border-color: var(--accent);
+}
+
+.update .icon {
+  width: 14px;
+  height: 14px;
+}
+
 /* A grid column widens to fit its longest unbreakable line, and song titles
    and names are kept on one line. So the grids that hold them use
    minmax(0, 1fr): the column stays as wide as the popup and the text is cut. */

@@ -45,7 +45,7 @@ The settings page of the extension holds four settings. The gear at the top righ
 | --- | --- |
 | Language | English or 日本語 (Japanese): the language of the popup, the settings page, and the item that the extension adds to the menus of YouTube Music. Until it is chosen, the extension follows the language of Chrome: Japanese in a Chrome in Japanese, and English in any other. |
 | Open as | Mini window, a small window below the button, or Side panel, the panel of Chrome on the right of the window, which stays open while you move between tabs. Mini window until the other is chosen. |
-| Server | The address of the room server, such as `https://music.example.com`. The address starts with `https://`. |
+| Server | The address of the room server, such as `https://music.example.com`. The address starts with `https://`, or with `http://localhost` or `http://127.0.0.1` for a room server on the same computer, which Chrome reaches over HTTP. |
 | Token | The token of the room server. |
 
 The language and Open as take effect as soon as they are chosen. The server and the token take effect with Save.
@@ -54,6 +54,10 @@ The extension keeps the settings in this Chrome, and reads the server and the to
 [Listen in a room](/musictogether/guides/rooms/) describes how to create and join a room.
 
 ## Update the extension
+
+The extension asks GitHub for its latest release once a day, with an ordinary request to the API of GitHub that carries no settings.
+When a newer version is out, the popup shows Version X.Y.Z is available at its top, and a click on it opens the page of the release.
+Chrome does not replace the extension folder by itself, so the update takes these steps:
 
 1. Download and extract the new release.
 2. Delete the old extension folder, and put the new one in its place, under the same name.
