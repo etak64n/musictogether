@@ -49,7 +49,7 @@ The index page of the server answers without the token, with the name and versio
 
 ```sh
 curl http://127.0.0.1:8080/
-# Music Together server 0.3.3
+# Music Together server 0.3.4
 ```
 
 ## Give the server an HTTPS address
