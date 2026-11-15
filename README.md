@@ -54,9 +54,9 @@ The room server reads four environment variables, all required:
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `ADDR` | The address to listen on | `:8080` |
-| `DATA_DIR` | The directory for the rooms | `/data` |
-| `LOG_FORMAT` | `json` or `text` | `json` |
+| `ADDR` | The host and port to listen on | `0.0.0.0:8080` |
+| `DATA_DIR` | The directory that keeps the rooms | `/data` |
+| `LOG_FORMAT` | The format of the logs: `json` or `text` | `json` |
 | `TOKEN` | The token that the extension sends: at least 8 ASCII letters, digits, or symbols | `a-long-token-of-your-own` |
 
 [Server configuration](https://etak64n.github.io/musictogether/settings/server/) describes the logs and the limits.

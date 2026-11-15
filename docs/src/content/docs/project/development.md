@@ -37,7 +37,7 @@ These commands run the room server from source, with its rooms in server/data.
 
 ```sh
 cd server
-ADDR=:8080 DATA_DIR=./data LOG_FORMAT=text TOKEN=a-local-token go run .
+ADDR=127.0.0.1:8080 DATA_DIR=./data LOG_FORMAT=text TOKEN=a-local-token go run .
 ```
 
 The extension reaches a room server over HTTPS only, so a room server on a development machine needs a tunnel or a reverse proxy with a certificate, as [Run a room server](/musictogether/getting-started/server/) describes.

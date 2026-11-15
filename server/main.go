@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -96,8 +97,8 @@ func loadConfig() (config, error) {
 		token:     os.Getenv("TOKEN"),
 	}
 	var problems []error
-	if cfg.addr == "" {
-		problems = append(problems, errors.New("Please set ADDR to the address to listen on, such as :8080."))
+	if _, _, err := net.SplitHostPort(cfg.addr); err != nil {
+		problems = append(problems, errors.New("Please set ADDR to the host and port to listen on, such as 0.0.0.0:8080."))
 	}
 	if cfg.dataDir == "" {
 		problems = append(problems, errors.New("Please set DATA_DIR to the directory to keep the rooms in, such as /data."))

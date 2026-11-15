@@ -26,7 +26,7 @@ func TestConfigNeedsEverySetting(t *testing.T) {
 }
 
 func TestConfigNeedsATokenThatTheExtensionCanSend(t *testing.T) {
-	t.Setenv("ADDR", ":8080")
+	t.Setenv("ADDR", "127.0.0.1:8080")
 	t.Setenv("DATA_DIR", t.TempDir())
 	t.Setenv("LOG_FORMAT", "json")
 	for _, tc := range []struct {
@@ -48,6 +48,31 @@ func TestConfigNeedsATokenThatTheExtensionCanSend(t *testing.T) {
 		}
 		if !tc.ok && (err == nil || !strings.Contains(err.Error(), "TOKEN")) {
 			t.Errorf("TOKEN %q: error %v; want it refused", tc.token, err)
+		}
+	}
+}
+
+func TestConfigNeedsAHostAndPortToListenOn(t *testing.T) {
+	t.Setenv("DATA_DIR", t.TempDir())
+	t.Setenv("LOG_FORMAT", "json")
+	t.Setenv("TOKEN", "listen-2gether!")
+	for _, tc := range []struct {
+		addr string
+		ok   bool
+	}{
+		{"0.0.0.0:8080", true},
+		{"127.0.0.1:8080", true},
+		{"[::1]:8080", true},
+		{"8080", false},      // a port without a host
+		{"localhost", false}, // a host without a port
+	} {
+		t.Setenv("ADDR", tc.addr)
+		_, err := loadConfig()
+		if tc.ok && err != nil {
+			t.Errorf("ADDR %q: %v; want it accepted", tc.addr, err)
+		}
+		if !tc.ok && (err == nil || !strings.HasPrefix(err.Error(), "Please set ADDR ")) {
+			t.Errorf("ADDR %q: error %v; want it refused", tc.addr, err)
 		}
 	}
 }

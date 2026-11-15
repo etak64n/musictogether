@@ -10,12 +10,13 @@ A missing or wrong value stops the server when it starts, with a line for each s
 
 | Variable | Required | Description | Example |
 | --- | --- | --- | --- |
-| `ADDR` | Yes | The address to listen on. | `:8080` |
+| `ADDR` | Yes | The host and port to listen on, as `host:port`. The host `0.0.0.0` listens on every network interface of the machine, and `127.0.0.1` on the machine itself only. | `0.0.0.0:8080` |
 | `DATA_DIR` | Yes | The directory for the rooms. The server creates `rooms/` in it, with one JSON file per room. | `/data` |
 | `LOG_FORMAT` | Yes | The format of the logs: `json` for one JSON object per line, or `text` for tab-separated columns. | `json` |
 | `TOKEN` | Yes | The token that the extension sends with every request. At least 8 ASCII letters, digits, or symbols, without spaces. | `a-long-token-of-your-own` |
 
 server/compose.yaml sets `ADDR`, `DATA_DIR`, and `LOG_FORMAT`, and reads `TOKEN` from the file .env next to it.
+In its container, the server listens on `0.0.0.0:8080`, and Docker publishes the port on 127.0.0.1 of the machine only.
 
 ## Token
 
