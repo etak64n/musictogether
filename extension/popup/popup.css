@@ -1057,10 +1057,31 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   pointer-events: none;
 }
 
-/* An open Standby without songs keeps the room of one song, where a song
-   dragged from Main or from YouTube Music can be dropped. */
+/* An open Standby without songs shows an empty row in the place of one song,
+   where a song dragged from Main or from YouTube Music can be dropped: a gray
+   square where the artwork goes, and that there are no songs. */
 #standby:empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-height: 41px;
+  padding: 4px 6px;
+}
+
+#standby:empty::before {
+  content: "";
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+#standby:empty::after {
+  content: attr(data-empty);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* A song or an album dragged from YouTube Music over Standby goes there. */

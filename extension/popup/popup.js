@@ -447,6 +447,9 @@ function renderStandby(standby) {
   renderWaiting('standby', standby);
 }
 
+// The empty row of Standby says so in the language of the popup.
+$('standby').dataset.empty = t('standbyEmpty');
+
 let standbyOpen = false;
 try {
   standbyOpen = localStorage.getItem('standbyFold') === 'open';
