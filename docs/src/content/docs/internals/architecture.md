@@ -9,10 +9,10 @@ description: The parts of Music Together, the timeline of a room, how a player f
 
 Music Together consists of the room server and an extension in the Chrome of each member. The extension has five parts.
 
-- The **popup** (extension/popup/) is the page that the button of the extension opens, in a mini window below the button or in the side panel of Chrome, as the settings choose. It shows the room of a tab, and passes what the member does to that tab. It keeps no state of its own, so closing it changes nothing. It follows the tabs while it is open: it connects to the tab in the room when there is one, and otherwise to the YouTube Music tab in front, so the side panel, which stays open, always shows the right tab. Its equalizer moves while the member's own player plays, without measuring the sound.
-- The **settings page** (extension/options/) keeps the language, the way the button opens the popup, the address of the room server, and the token in the storage of the extension.
+- The **popup** (extension/popup/) is the page that the button of the extension opens, in a mini window below the button or in the side panel of Chrome, as the settings choose. It shows the room of a tab, and passes what the member does to that tab. It keeps no state of the room, so closing it changes nothing. Its gear shows the settings in place of the room: the language, the way the button opens the popup, the address of the room server, and the token, which it keeps in the storage of the extension. It follows the tabs while it is open: it connects to the tab in the room when there is one, and otherwise to the YouTube Music tab in front, so the side panel, which stays open, always shows the right tab. Its seek bar shows where the room is in the current song. The popup computes the position from the room's timeline and the difference between the clocks of Chrome and the room server, which the room script measures.
 - The **room script** (extension/content/room.js) runs in every tab of YouTube Music. Chrome runs it in an **isolated world**: it reads the document of the page, and its JavaScript variables are separate from those of the page. It keeps the connection to the room server, and decides what the player of the tab plays.
 - The **page script** (extension/content/page.js) runs in the JavaScript world of the page of YouTube Music, where the player of YouTube Music is reachable. It drives the player for the room script, and reports what the player does. The two scripts exchange JSON in DOM events, because a DOM event reaches both worlds.
+- The **invite script** (extension/content/invite.js) runs in the isolated world of the room script, before any script of the page. It takes the room ID of an invite link out of the address, and leaves it for the room script.
 - The **service worker** (extension/background.js) remembers which tab is in a room, so that the popup finds that tab and a reloaded tab joins its room again. It also shows the number of songs waiting in the queue on the button, and makes the button open the popup in the mini window or in the side panel, as the settings say. Once a day, it asks GitHub for the latest release, and keeps a newer version for the popup, which shows a notice of it.
 
 The **room server** (server/) keeps the rooms, takes the commands of the members, and sends every change of a room to every member of it.
@@ -71,20 +71,31 @@ The command names the item, so several members who send it for the same song mov
 Each connection to a room has a **listening** flag, which is true while the member's own player plays.
 Pausing, in the popup or in YouTube Music, sets the flag to false, and the room script stops correcting the player.
 Playing sets the flag to true, and the player moves to the room's current position.
+Any start of the player counts as playing: a click on play in the popup or in YouTube Music, and YouTube Music moving on to a song by itself, as when it was paused at the end of a song while the room moved on. A start within 2 seconds after the member paused does not count, because the player takes that long to stop.
 The room server moves the timeline while at least one connection of the room is listening, and stops it when the last one stops listening.
 When every listening member disconnects, the room server waits 30 seconds before it stops the timeline, so that a member who reconnects at once finds the room playing.
 
 ## The menu item
 
-The page script adds Add to Music Together to the menu of a song in YouTube Music, after the item Add to queue.
-YouTube Music builds every menu in one shared element, whose data names the song of the menu. The page script reads the ID of the song from that data, and places the item while the tab is in a room.
+The page script adds Add to Music Together to the menu of a song, an album, or a playlist in YouTube Music, after the item Add to queue.
+YouTube Music builds every menu in one shared element, whose data holds the item Add to queue with its target: the ID of a song, or the ID of the playlist of an album or a playlist. The page script reads the target from that data, and places the item while a tab of this Chrome is in a room, in every tab of YouTube Music.
+For a song, the page script asks YouTube Music's own queue lookup for its title, artists, length, and artwork. For an album or a playlist, the same lookup with the playlist's ID gives all its songs in order, and the room script sends them in one `addTracks` command, so that the room changes once.
+The service worker tells every tab of YouTube Music when a tab joins or leaves a room. Songs chosen in a tab outside the room go through the service worker to the tab in the room, which adds them to the room and sends the result back for the notice.
+
+## The invite link
+
+An invite link is the address of YouTube Music with the parameter `musictogether`, whose value is a room ID.
+YouTube Music takes the parameters that it does not know out of the address as soon as its own scripts run, which is before the room script runs.
+So the invite script runs at `document_start`, before any script of the page. It reads the room ID, takes the parameter out of the address with the History API, so that a reload does not join again, and leaves the room ID in a variable of the isolated world, which the room script reads.
+The room script then joins the room with the name and the room server of the settings. When the settings lack them, the room script keeps the room ID, and the popup shows it in its lobby.
+The link carries the room ID only. The address and the token of the room server stay in each member's settings, so a link cannot send a token to a server that its member did not choose.
 
 ## Storage of rooms
 
 The room server writes a room to a JSON file in `DATA_DIR/rooms/` after every change.
 It writes a temporary file first and renames it over the old one, so that a crash leaves the old file or the new one whole.
 When it starts, it reads every file back.
-Every 10 minutes, it deletes the rooms that nobody has joined or changed for 7 days.
+Every minute, it deletes the rooms that nobody has been in or changed for an hour.
 
 ## The token
 

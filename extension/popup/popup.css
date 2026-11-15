@@ -60,7 +60,8 @@ ul {
 }
 
 button,
-input {
+input,
+select {
   color: inherit;
   font: inherit;
 }
@@ -251,9 +252,14 @@ main {
     border-color 160ms ease;
 }
 
-.square:hover {
+.square:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.square:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .square.primary-square {
@@ -262,7 +268,7 @@ main {
   color: #ffffff;
 }
 
-.square.primary-square:hover {
+.square.primary-square:hover:not(:disabled) {
   border-color: var(--accent-strong);
   background: var(--accent-strong);
   color: #ffffff;
@@ -297,6 +303,13 @@ main {
   background: var(--accent-soft);
   color: var(--accent);
   cursor: default;
+}
+
+/* A row without a button keeps the button's width, so that the names of the
+   people who added the songs line up with those of the other rows. */
+.action-slot {
+  flex: none;
+  width: 24px;
 }
 
 /* Removing a song from the queue: a thin cross, faint until the row is
@@ -377,13 +390,14 @@ main {
   gap: 4px;
 }
 
-.field span {
+.field > span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
 }
 
-.field input {
+.field input:not([type="radio"]),
+.field select {
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -392,7 +406,8 @@ main {
   font-weight: 700;
 }
 
-.field input:focus {
+.field input:not([type="radio"]):focus,
+.field select:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -413,6 +428,110 @@ main {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.5;
+}
+
+/* The room that an invite link named, above the fields that join it. */
+.note {
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+/* Settings: a view of the popup in place of everything else, which the gear
+   opens and closes. */
+.form-title {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* The gear stays lit while the settings are open. */
+.topbar #settings[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* A choice of a few options, side by side in columns of the same width. The
+   chosen one takes the accent. */
+.radios {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 6px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.radio:hover {
+  border-color: var(--accent);
+}
+
+.radio:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.radio input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.settings-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+/* Save sits at the bottom right. Saved, it shows a check that grows into
+   place once; the button keeps its size. */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save {
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+}
+
+.save.saved .icon {
+  width: 16px;
+  height: 16px;
+  animation: saved-check 220ms ease-out;
+}
+
+@keyframes saved-check {
+  from {
+    transform: scale(0.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save.saved .icon {
+    animation: none;
+  }
 }
 
 /* Room */
@@ -454,10 +573,61 @@ main {
 }
 
 /* The visualizer is drawn by popup.js on this canvas. */
-.viz {
-  display: block;
+/* Where the room is in its song: the time so far, the bar, and the length.
+   The part of the bar up to the position takes the accent. A member without
+   the permission sees the bar without its handle. */
+.seek {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.seek-time {
+  min-width: 28px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.seek-time.end {
+  text-align: right;
+}
+
+.seek-bar {
+  --progress: 0%;
   width: 100%;
-  height: 52px;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.seek-bar:disabled {
+  cursor: default;
+}
+
+.seek-bar::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius);
+  background: linear-gradient(to right, var(--accent) var(--progress), var(--line) var(--progress));
+}
+
+.seek-bar::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  appearance: none;
+}
+
+.seek-bar:disabled::-webkit-slider-thumb {
+  visibility: hidden;
 }
 
 /* Songs */
@@ -523,12 +693,19 @@ main {
   line-height: 1.35;
 }
 
+/* Without a song, the lines stay, empty, at the height of one line. */
+.now .title,
+.now .sub {
+  min-height: 1lh;
+}
+
 .now .title {
   font-size: 13px;
 }
 
-/* The artists, then who added the song. The artists give way first, so the
-   name stays in sight. */
+/* The artists, then who added the song at the right end of the line, so that
+   the names line up from row to row. The artists give way first, so the name
+   stays in sight. */
 .sub-row {
   display: flex;
   align-items: center;
@@ -536,7 +713,7 @@ main {
 }
 
 .sub-row .sub {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -667,7 +844,6 @@ main {
    songs that wait. The lists in it do not scroll on their own. */
 .queue-scroll {
   position: relative;
-  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -675,8 +851,10 @@ main {
   overflow: visible;
 }
 
-/* A song that played: faded, with its artwork in gray. */
-.played li {
+/* A song that played: faded, with its artwork in gray. Its button, which adds
+   it again, keeps its color. */
+.played li > .art,
+.played li > .text {
   opacity: 0.45;
 }
 
@@ -684,19 +862,129 @@ main {
   filter: grayscale(1);
 }
 
-.played:not(:empty) {
-  border-bottom: 1px solid var(--panel-soft);
+/* The song that plays, in the middle of the queue: framed in the accent. The
+   frame is drawn inside the row, so that the row keeps the size and the line
+   of the others. */
+.current li {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.results {
-  max-height: 240px;
+/* Searching: the field and its results, together in one panel. */
+.search-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   padding: 4px;
 }
 
-/* The side panel is as tall as the window, so its lists grow with it. */
-html.panel .queue-scroll,
-html.panel .results {
-  max-height: 45vh;
+.search-panel .list-message {
+  padding: 2px 6px 4px;
+}
+
+/* The queue and the search results share the height that the rest of the room
+   leaves, about 374px, in the ratio 6 to 4, so that everything stays on the
+   screen. That height is --available: the height of the side panel, or, for
+   the mini window, the room below the popup in the browser window, which
+   popup.js measures, up to the 600px that Chrome allows a popup. The queue
+   keeps its height however few songs it holds, so that the search below it
+   stays in place as songs come and go. It still shows 2 songs: the last one
+   that played and the one that plays. The results show at least 1, and take
+   only the height of their songs. */
+:root {
+  --available: 600px;
+}
+
+html.panel {
+  --available: 100vh;
+}
+
+/* The folded height is a registered length, so that popup.js reads it in
+   pixels to tell whether the songs fit. */
+@property --queue-folded {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 80px;
+}
+
+.queue-scroll {
+  --queue-folded: max(80px, calc((var(--available) - 374px) * 0.6));
+  height: var(--queue-folded);
+}
+
+.results {
+  max-height: max(40px, calc((var(--available) - 374px) * 0.4));
+}
+
+/* In the mini window, search results get most of the room while they are open:
+   the queue folds to its 2 songs, and the card of the room steps aside until the
+   search is cleared. The rest of the popup takes about 310px then. */
+html:not(.panel) #room:has(#results:not([hidden])) .room-card {
+  display: none;
+}
+
+html:not(.panel) #room:has(#results:not([hidden])) .queue-scroll {
+  --queue-folded: 80px;
+}
+
+html:not(.panel) #room:has(#results:not([hidden])) #results {
+  max-height: max(80px, calc(var(--available) - 310px));
+}
+
+/* Expanded, the queue reaches down to the bottom of the window, below the song
+   that plays, and scrolls inside from there. The parts above and below it take
+   177px. */
+#queue-panel.expanded .queue-scroll {
+  height: max(120px, calc(var(--available) - 177px));
+}
+
+/* The heading of the queue, with the button that expands and folds it. */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 0 0;
+}
+
+.section-head .section-title {
+  padding-bottom: 0;
+}
+
+/* While the songs fit, the button is not needed; it keeps its place, so that
+   nothing below it moves when it comes. */
+.fold.unneeded {
+  visibility: hidden;
+}
+
+.fold {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.fold:hover {
+  background: var(--panel-soft);
+  color: var(--accent);
+}
+
+/* The chevron points down to expand, and up to fold. */
+.fold .icon {
+  width: 14px;
+  height: 14px;
+  transform: rotate(90deg);
+}
+
+.fold[aria-expanded="true"] .icon {
+  transform: rotate(-90deg);
 }
 
 .list-message {
@@ -708,10 +996,17 @@ html.panel .results {
 
 /* Room facts */
 
+/* The labels take one width, so that the names line up. The longest label,
+   Participants with its arrow, fits in it. */
 .room-card {
+  --label-width: 64px;
   display: grid;
   gap: 8px;
   padding: 8px 10px;
+}
+
+html[lang="en"] .room-card {
+  --label-width: 92px;
 }
 
 .facts {
@@ -721,7 +1016,7 @@ html.panel .results {
 
 .facts > div {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: var(--label-width) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 22px;
@@ -743,9 +1038,67 @@ html.panel .results {
 
 /* The room ID reaches 4px to the left of its column, so that its text lines up
    with the name below it while its box has room around the text. Its cell
-   shows that part instead of cutting it off. */
+   shows that part instead of cutting it off. The button that copies the
+   invite link sits at the end of the same row. */
 .facts dd:has(> .room-id) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   overflow: visible;
+}
+
+.invite-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invite-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.invite-link .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* A member's name, after the mark that tells whether the member listens. */
+.member {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member .presence {
+  width: 11px;
+  height: 11px;
+}
+
+.member .presence.on {
+  color: var(--accent);
+}
+
+.member .presence.off {
+  color: var(--muted);
 }
 
 .facts dd.absent {
@@ -793,7 +1146,7 @@ html.panel .results {
   grid-template-columns: minmax(0, 1fr);
   /* The first name sits on the same line as the label, like the other rows. */
   margin-top: -22px;
-  padding-left: 72px;
+  padding-left: calc(var(--label-width) + 8px);
 }
 
 .guest-list li {

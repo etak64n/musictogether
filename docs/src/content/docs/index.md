@@ -19,7 +19,7 @@ Music Together is not affiliated with Google or YouTube. It relies on parts of Y
 
 ## Guides
 
-- [Listen in a room](/musictogether/guides/rooms/): creating and joining a room, the shared queue, pausing your own player, and the messages of the popup
+- [Listen in a room](/musictogether/guides/rooms/): creating a room, joining it from an invite link, the shared queue, pausing your own player, and the messages of the popup
 - [Host and participants](/musictogether/guides/host/): what each member of a room can do, and how the host closes a room
 
 ## Settings

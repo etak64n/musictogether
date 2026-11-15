@@ -40,16 +40,18 @@ Chrome opens the mini window below the button, so dragging the button to the rig
 
 ## Fill in the settings
 
-The settings page of the extension holds four settings. The gear at the top right of the popup opens it, and so does Options in the menu that a right click on the button shows.
+The extension has four settings, which show in the popup itself. The gear at the top right of the popup opens them in place of the room, and closes them again.
 
 | Setting | Value |
 | --- | --- |
-| Language | English or 日本語 (Japanese): the language of the popup, the settings page, and the item that the extension adds to the menus of YouTube Music. Until it is chosen, the extension follows the language of Chrome: Japanese in a Chrome in Japanese, and English in any other. |
+| Language | English or 日本語 (Japanese): the language of the popup, its settings included, and of the item that the extension adds to the menus of YouTube Music. Until it is chosen, the extension follows the language of Chrome: Japanese in a Chrome in Japanese, and English in any other. |
 | Open as | Mini window, a small window below the button, or Side panel, the panel of Chrome on the right of the window, which stays open while you move between tabs. Mini window until the other is chosen. |
 | Server | The address of the room server, such as `https://music.example.com`. The address starts with `https://`, or with `http://localhost` or `http://127.0.0.1` for a room server on the same computer, which Chrome reaches over HTTP. |
 | Token | The token of the room server. |
 
-The language and Open as take effect as soon as they are chosen. The server and the token take effect with Save.
+The language takes effect as soon as it is chosen: the popup opens again in that language, on the settings.
+Open as takes effect from the next click of the button. Choosing Mini window in the side panel closes the side panel at once.
+The server and the token take effect with Save.
 The person who runs the room server gives the address and the token.
 The extension keeps the settings in this Chrome, and reads the server and the token every time it creates or joins a room.
 [Listen in a room](/musictogether/guides/rooms/) describes how to create and join a room.

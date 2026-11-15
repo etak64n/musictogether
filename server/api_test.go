@@ -145,6 +145,17 @@ func members(ev event) []string {
 	return names
 }
 
+// listeners tells, for each member's name, whether the member listens.
+func listeners(ev event) map[string]bool {
+	out := map[string]bool{}
+	list, _ := ev.data["members"].([]any)
+	for _, m := range list {
+		fields := m.(map[string]any)
+		out[fields["name"].(string)] = fields["listening"] == true
+	}
+	return out
+}
+
 func TestJoinSendsHelloThenTheRoom(t *testing.T) {
 	srv, _ := newTestServer(t)
 	roomID := createRoom(t, srv, "client-neko")
@@ -218,18 +229,41 @@ func TestCommandsReachEveryMember(t *testing.T) {
 	}
 }
 
+func TestAddTracksTellsHowManyWereAdded(t *testing.T) {
+	srv, _ := newTestServer(t)
+	roomID := createRoom(t, srv, "client-neko")
+	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
+	sessionID := next(t, neko).data["sessionId"].(string)
+	next(t, neko)
+
+	resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{
+		"sessionId": sessionID,
+		"type":      "addTracks",
+		"tracks":    []*Track{testTrack("aaaaaaaaaaa"), testTrack("bbbbbbbbbbb"), testTrack("ccccccccccc")},
+	})
+	if resp.StatusCode != http.StatusOK || body["added"] != 3.0 {
+		t.Fatalf("addTracks: status %d, body %v; want 200 with 3 added", resp.StatusCode, body)
+	}
+	room := next(t, neko)
+	current, _ := room.data["current"].(map[string]any)
+	queue, _ := room.data["queue"].([]any)
+	if current["videoId"] != "aaaaaaaaaaa" || len(queue) != 2 || queue[1].(map[string]any)["videoId"] != "ccccccccccc" {
+		t.Errorf("current = %v, queue = %v; want the 3 songs in their order", current, queue)
+	}
+}
+
 func TestTheCreatorIsTheHost(t *testing.T) {
 	srv, _ := newTestServer(t)
 	roomID := createRoom(t, srv, "client-neko")
 	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
 	nekoID := next(t, neko).data["memberId"]
-	if room := next(t, neko); room.data["hostId"] != nekoID || room.data["participantControl"] != false {
-		t.Errorf("hostId = %v, participantControl = %v; want ねこ's member ID and false", room.data["hostId"], room.data["participantControl"])
+	if room := next(t, neko); room.data["hostId"] != nekoID || room.data["participantControl"] != true {
+		t.Errorf("hostId = %v, participantControl = %v; want ねこ's member ID, and true in a new room", room.data["hostId"], room.data["participantControl"])
 	}
 
 	inu := openStream(t, srv, roomID, "client-inu", "いぬ")
 	inuSession := next(t, inu).data["sessionId"].(string)
-	resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{"sessionId": inuSession, "type": "participantControl", "value": true})
+	resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{"sessionId": inuSession, "type": "participantControl", "value": false})
 	if resp.StatusCode != http.StatusForbidden || body["error"] != "host_only" {
 		t.Errorf("participantControl by a participant: status %d, body %v; want 403 host_only", resp.StatusCode, body)
 	}
@@ -379,7 +413,7 @@ func TestRoomCreationIsLimitedPerAddress(t *testing.T) {
 }
 
 func TestTheRoomPlaysWhileAnyoneListens(t *testing.T) {
-	srv, hub := newTestServer(t)
+	srv, _ := newTestServer(t)
 	roomID := createRoom(t, srv, "client-neko")
 	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
 	nekoSession := next(t, neko).data["sessionId"].(string)
@@ -405,14 +439,17 @@ func TestTheRoomPlaysWhileAnyoneListens(t *testing.T) {
 	if !playing(neko) || !playing(inu) {
 		t.Fatalf("the room did not start the song")
 	}
-	// One member pausing their own player leaves the room playing for the other.
+	// One member pausing their own player leaves the room playing for the
+	// other, and everyone sees who stopped.
 	command(nekoSession, map[string]any{"type": "listening", "value": false})
-	room := hub.room(roomID)
-	room.mu.Lock()
-	stillPlaying := room.state.Playback.Playing
-	room.mu.Unlock()
-	if !stillPlaying {
-		t.Fatalf("the room stopped while いぬ was listening")
+	for _, events := range []<-chan event{neko, inu} {
+		ev := next(t, events)
+		if playback, _ := ev.data["playback"].(map[string]any); playback["playing"] != true {
+			t.Fatalf("the room stopped while いぬ was listening")
+		}
+		if got := listeners(ev); got["ねこ"] || !got["いぬ"] {
+			t.Errorf("listening = %v; want いぬ only", got)
+		}
 	}
 	// With nobody listening, the room stops where it is.
 	command(inuSession, map[string]any{"type": "listening", "value": false})

@@ -20,12 +20,13 @@ Each extension computes the position from the timeline, and moves its own player
 
 ## Features
 
-- **A shared queue.** Everyone in a room adds songs, from the search of the popup or from the ⋮ menu of a song in YouTube Music. The queue is reordered by dragging, and the songs that have played stay at its top in gray.
-- **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now.
+- **Invite links.** The host copies a link that opens YouTube Music and joins the room.
+- **A shared queue.** Everyone in a room adds songs, from the search of the popup or from the ⋮ menu of a song, an album, or a playlist in YouTube Music. The queue is reordered by dragging, and the songs that have played stay at its top in gray, ready to be added again.
+- **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now. Everyone sees who is listening.
 - **A host.** The host decides whether participants may skip, seek, and reorder, and ends the room.
 - **Your own server.** One Go program without dependencies keeps the rooms in JSON files, and answers only the people who know its token.
 - **A mini window or a side panel.** The button opens the popup in a small window below it, or in the side panel of Chrome, which stays open while you move between tabs.
-- **English and Japanese.** The screens of the extension follow the language of Chrome, and the settings page switches them between the two.
+- **English and Japanese.** The screens of the extension follow the language of Chrome, and its settings switch them between the two.
 
 ## Quick start
 
@@ -46,7 +47,7 @@ Install the extension in Chrome:
 2. Open `chrome://extensions`, turn on Developer mode, click Load unpacked, and choose the folder.
 3. Click the gear in the popup of Music Together, and enter the address of the server and its token.
 
-Open YouTube Music, create a room in the popup, and send its room ID to your friends.
+Open YouTube Music, create a room in the popup, and send its invite link to your friends.
 
 ## Configuration
 

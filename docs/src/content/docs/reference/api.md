@@ -134,7 +134,7 @@ The data of `room`:
 | `version` | number | A number that grows with every change of the room. |
 | `serverTime` | number | The clock of the server when it sent the event, in milliseconds since the Unix epoch. |
 | `hostId` | string | The `memberId` of the host. |
-| `participantControl` | boolean | Whether participants may seek, skip, and reorder the queue. |
+| `participantControl` | boolean | Whether participants may seek, skip, and reorder the queue. True in a new room. |
 | `current` | item or null | The song that plays. `null` while nothing plays, and the queue is then empty. |
 | `queue` | array of items | The songs after `current`, in the order they play. |
 | `history` | array of items | The songs that played, oldest first: the last 50 that the room moved past with `next` or `ended`. |
@@ -171,6 +171,7 @@ A member is a person in the room:
 | --- | --- | --- |
 | `id` | string | The `memberId` of the member. |
 | `name` | string | The name that the member joined with. |
+| `listening` | boolean | Whether the member's own player plays. A member with two connections listens while either of them does. |
 
 ## Change a room
 
@@ -182,6 +183,7 @@ When the command changes the room, every member receives the changed room as a `
 | `sessionId` | string | Yes | The `sessionId` of an open stream to the room. |
 | `type` | string | Yes | The command, one of the types in the table of commands. |
 | `track` | track | For `add` | The song to add. |
+| `tracks` | array of tracks | For `addTracks` | The songs to add, in order: from 1 to 200. |
 | `itemId` | string | For `remove`, `move`, `next`, and `ended` | The `id` of an item. |
 | `index` | number | For `move` | The new place of the item in the queue, from 0. |
 | `position` | number | For `seek` | The new position in seconds. |
@@ -193,6 +195,12 @@ The response has the status 200.
 {"ok": true}
 ```
 
+The response to `addTracks` also has `added`, the number of songs that the queue took.
+
+```json
+{"ok": true, "added": 26}
+```
+
 The errors are `bad_request`, `not_member`, `host_only`, `room_not_found`, and `queue_full`.
 
 The commands:
@@ -200,14 +208,15 @@ The commands:
 | `type` | Who | Effect |
 | --- | --- | --- |
 | `add` | Everyone | Adds `track` to the end of the queue. In a room where nothing plays, the song starts at once. |
+| `addTracks` | Everyone | Adds `tracks` to the end of the queue in their order, as many as the queue has room for. In a room where nothing plays, the first song starts at once. One invalid track adds none of them (`bad_request`), and a full queue adds none (`queue_full`). |
 | `remove` | The host, and the member who added the item | Removes the item from the queue. |
 | `move` | The host, and participants with the permission | Takes the item out of the queue and puts it back at `index`. 0 plays it next, and an index past the end puts it last. |
 | `seek` | The host, and participants with the permission | Moves the timeline to `position`. A position past the end of the song is the end. |
 | `next` | The host, and participants with the permission | Skips `current`, when `itemId` is still `current`. The skipped song goes to the end of `history`. |
 | `ended` | Everyone | Moves on from `current` when `itemId` is still `current` and the timeline is within 5 seconds of its end, or at once when its `duration` is 0. The song goes to the end of `history`. |
-| `listening` | Everyone | Sets whether the member of this connection listens. The room moves forward while anyone listens. |
+| `listening` | Everyone | Sets whether the member of this connection listens. The room moves forward while anyone listens. A change reaches every member as a `room` event, in `members`, even when the room plays on. |
 | `participantControl` | The host | Gives participants the permission, or takes it away. |
-| `close` | The host | Deletes the room. Every member receives `closed`, and every stream ends. The extension sends it 10 seconds after the host clicks End room, unless the host clicks Undo. |
+| `close` | The host | Deletes the room. Every member receives `closed`, and every stream ends. The extension sends it 5 seconds after the host clicks End room, unless the host clicks Undo. |
 
 `next` and `ended` name the item to move past, so that several members who reach the end of the same song at once move the room on only once.
 

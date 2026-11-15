@@ -2,7 +2,7 @@
 // tab's room, and passes what the listener does to the tab's content script.
 // The room itself lives in the tab, so closing the popup changes nothing.
 
-import { hasString, loadLanguage, localize, translator } from '../i18n.js';
+import { LANGUAGES, hasString, loadLanguage, localize, translator } from '../i18n.js';
 
 const YTM_URL = 'https://music.youtube.com/';
 const ROOM_ID_PATTERN = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/;
@@ -19,10 +19,15 @@ localize(document, t);
 // What the tab or the room server reports, in words.
 const message = (code) => t(hasString(code) ? code : 'network');
 
-// The room server and its token come from the settings page. Without them,
-// the popup asks for them in place of creating or joining a room.
+// The room server and its token come from the settings. Without them, the
+// popup asks for them in place of creating or joining a room.
 const { server, token, display, update } = await chrome.storage.local.get(['server', 'token', 'display', 'update']);
-const configured = Boolean(server && token);
+let configured = Boolean(server && token);
+
+// The settings show in the popup in place of everything else. A popup that
+// reloads to change its language opens on them again, with #settings.
+let settingsOpen = location.hash === '#settings';
+if (settingsOpen) history.replaceState(null, '', location.pathname + location.search);
 
 // A newer release, which the service worker found on GitHub, is shown above
 // everything else until the extension is updated.
@@ -38,6 +43,25 @@ if (update && update.version && update.url) {
 const inPanel = display === 'panel';
 document.documentElement.classList.toggle('panel', inPanel);
 
+// The folded lists share the height that the rest of the popup leaves (popup.css).
+// In the mini window, that height is the room from the popup's top to the bottom
+// of the browser window, up to the 600px that Chrome allows a popup, so that the
+// popup fits a short window too. The side panel uses its own height.
+const POPUP_MAX_HEIGHT = 600;
+if (!inPanel) {
+  try {
+    const browser = await chrome.windows.getCurrent();
+    // A popup that cannot tell where it is assumes the usual height of the toolbars.
+    const top = window.screenY > browser.top ? window.screenY : browser.top + 90;
+    const room = browser.top + browser.height - top - 8;
+    if (room > 0) {
+      document.documentElement.style.setProperty('--available', `${Math.min(POPUP_MAX_HEIGHT, room)}px`);
+    }
+  } catch {
+    // The height stays at the 600px of popup.css.
+  }
+}
+
 let tabId = null;
 let port = null;
 let unreachable = false;
@@ -46,7 +70,7 @@ let localError = '';
 let shownNotice = 0;
 let toastTimer = 0;
 let searchSeq = 0;
-let rendered = { now: '', queue: '', played: '' };
+let rendered = { now: '', queue: '', played: '', current: '' };
 
 function isHost() {
   return Boolean(view && view.room && view.room.hostId === view.memberId);
@@ -176,12 +200,14 @@ function render() {
   else if (unreachable) section = 'reload';
   else if (view && view.status !== 'idle') section = 'room';
   else if (view) section = configured ? 'lobby' : 'setup';
-  for (const name of ['no-tab', 'reload', 'setup', 'lobby', 'room']) $(name).hidden = name !== section;
-  $('leave').hidden = section !== 'room';
+  for (const name of ['no-tab', 'reload', 'setup', 'lobby', 'room']) $(name).hidden = settingsOpen || name !== section;
+  $('settings-view').hidden = !settingsOpen;
+  $('settings').setAttribute('aria-pressed', String(settingsOpen));
+  $('leave').hidden = settingsOpen || section !== 'room';
 
   if (section === 'lobby') renderLobby();
   if (section === 'room') renderRoom();
-  if (section !== 'room') rendered = { now: '', queue: '', played: '' };
+  if (section !== 'room') rendered = { now: '', queue: '', played: '', current: '' };
 
   if (view && view.notice && view.notice.id !== shownNotice) {
     shownNotice = view.notice.id;
@@ -189,7 +215,19 @@ function render() {
   }
 }
 
+// A tab opened from an invite link waits in the lobby with the room's ID, on the
+// tab that joins, until the name is entered and Join is clicked.
+let shownInvite = '';
+
 function renderLobby() {
+  if (view.invite && view.invite !== shownInvite) {
+    shownInvite = view.invite;
+    $('room-id').value = view.invite;
+    showLobbyTab('join');
+    return;
+  }
+  $('invite-note').hidden = !view.invite;
+  $('invite-note').textContent = view.invite ? t('invited', { roomId: view.invite }) : '';
   $('create').disabled = view.busy;
   $('join').disabled = view.busy;
   const text = localError || (view.error ? message(view.error) : '');
@@ -208,24 +246,44 @@ function renderRoom() {
   renderLeave();
   renderMembers(room ? room.members : [], room ? room.hostId : '');
   renderNow(room);
+  renderSeek();
   const queue = room ? room.queue : [];
   // A server older than the history sends none.
   const history = room && room.history ? room.history : [];
-  $('queue-panel').hidden = queue.length === 0 && history.length === 0;
-  renderPlayed(history);
+  const playedChanged = renderPlayed(history);
+  renderCurrent(room ? room.current : null);
   renderQueue(queue);
+  // When another song has finished, the queue scrolls so that the last one that
+  // played is at its top, with the song that plays and the songs that wait below
+  // it. The rows below must be in place first, or there is nothing to scroll.
+  if (playedChanged) {
+    const last = $('played').lastElementChild;
+    $('queue-scroll').scrollTop = last ? last.offsetTop : 0;
+  }
 }
 
-// The songs that played, in gray above the songs that wait. When another song
-// has finished, the queue scrolls so that the last one that played is at its
-// top, with the songs that wait below it.
+// The song that plays, framed between the songs that played and the songs that wait.
+function renderCurrent(item) {
+  const key = item ? item.id : '';
+  if (key === rendered.current) return;
+  rendered.current = key;
+  $('current').replaceChildren(...(item ? [songRow(item, item.artists, emptyAction(), item.addedBy)] : []));
+}
+
+// The songs that played, in gray above the song that plays, each with a button
+// that adds it to the queue again. Tells whether they changed.
 function renderPlayed(history) {
   const key = JSON.stringify(history.map((item) => item.id));
-  if (key === rendered.played) return;
+  if (key === rendered.played) return false;
   rendered.played = key;
-  $('played').replaceChildren(...history.map((item) => songRow(item, item.artists, document.createElement('span'), item.addedBy)));
-  const last = $('played').lastElementChild;
-  $('queue-scroll').scrollTop = last ? last.offsetTop : 0;
+  $('played').replaceChildren(...history.map((item) => songRow(item, item.artists, addButton(trackOf(item), 'addAgain'), item.addedBy)));
+  return true;
+}
+
+// The song of an item in the room, without what the room added to it.
+function trackOf(item) {
+  const { videoId, title, artists, album, duration, thumbnail } = item;
+  return { videoId, title, artists, album, duration, thumbnail };
 }
 
 // The host ends the room for everyone with one click, and can take it back while
@@ -253,37 +311,61 @@ setInterval(() => {
 function renderMembers(members, hostId) {
   const host = members.find((member) => member.id === hostId);
   const guests = members.filter((member) => member.id !== hostId);
-  $('host-member').textContent = host ? host.name : t('hostAbsent');
+  if (host) $('host-member').replaceChildren(memberLine(host));
+  else $('host-member').textContent = t('hostAbsent');
   $('host-member').classList.toggle('absent', !host);
   // Everyone else is in a list that is closed until it is opened.
   $('guests').hidden = guests.length === 0;
   $('guest-list').replaceChildren(...guests.map((member) => {
     const li = document.createElement('li');
-    li.textContent = member.name;
+    li.append(memberLine(member));
     return li;
   }));
 }
 
+// A member's name, after a mark that tells whether the member listens: bars
+// while their player plays, and a pause while it does not. A server older than
+// this mark does not say, and the name stands alone.
+function memberLine(member) {
+  const line = document.createElement('span');
+  line.className = 'member';
+  const name = document.createElement('span');
+  name.className = 'member-name';
+  name.textContent = member.name;
+  if (typeof member.listening === 'boolean') {
+    const mark = icon(member.listening ? 'icon-listening' : 'icon-pause');
+    mark.classList.add('presence', member.listening ? 'on' : 'off');
+    const label = t(member.listening ? 'memberListening' : 'memberPaused', { name: member.name });
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', label);
+    line.title = label;
+    line.append(mark);
+  }
+  line.append(name);
+  return line;
+}
+
 // Everyone pauses and plays their own player; skipping is the room's.
+// The block stays while nothing plays, with its lines empty and its buttons off,
+// so that nothing below it moves when a song starts.
 function renderNow(room) {
   const item = room && room.current;
-  $('now').hidden = !item;
   $('next').hidden = !canControl();
-  viz.playing = Boolean(item && view.listening && room.playback.playing);
+  $('next').disabled = !item;
   const toggle = $('toggle');
-  toggle.classList.toggle('playing', view.listening);
+  toggle.disabled = !item;
+  toggle.classList.toggle('playing', Boolean(item) && view.listening);
   const label = t(view.listening ? 'pauseOwn' : 'playFromRoom');
   toggle.setAttribute('aria-label', label);
   toggle.title = label;
   const key = item ? item.id : '';
   if (key === rendered.now) return;
   rendered.now = key;
-  if (!item) return;
-  $('now-art').replaceChildren(artwork(item.thumbnail));
   stopMarquee($('now'));
-  setLine($('now-title'), item.title);
-  setLine($('now-sub'), item.artists);
-  showAddedBy($('now-by'), item.addedBy);
+  $('now-art').replaceChildren(...(item ? [artwork(item.thumbnail)] : []));
+  setLine($('now-title'), item ? item.title : '');
+  setLine($('now-sub'), item ? item.artists : '');
+  showAddedBy($('now-by'), item ? item.addedBy : '');
 }
 
 function renderQueue(queue) {
@@ -297,7 +379,7 @@ function renderQueue(queue) {
   if (key === rendered.queue) return;
   rendered.queue = key;
   $('queue').replaceChildren(...queue.map((item) => {
-    let action = document.createElement('span');
+    let action = emptyAction();
     if (removable(item)) {
       action = iconButton('icon-remove', t('remove'));
       action.classList.add('remove-button');
@@ -450,119 +532,70 @@ for (const type of ['pointercancel', 'lostpointercapture']) {
   });
 }
 
-// --- visualizer ---
+// --- seek bar ---
 
-// An LED equalizer: each column is a stack of small segments. A column jumps
-// up at once and drops at a steady rate, and the segment at its recent peak
-// stays lit for a moment before it falls. The sound is not measured: while
-// this listener's song plays, the columns move to a made-up beat, which
-// keeps them moving whatever happens in the YouTube Music tab.
-const VIZ_BARS = 32;
-const VIZ_ROWS = 11;
-const VIZ_GAP = 2; // px between columns
-const VIZ_FALL = 2.5; // of the full height per second
-const VIZ_PEAK_HOLD_MS = 450;
-const VIZ_PEAK_FALL = 1.2; // of the full height per second
-// Lit segments go from deep teal at the bottom to light teal at the top; the
-// held peak is deep teal, and unlit segments are a faint grid.
-const VIZ_LIT_BOTTOM = [5, 102, 114];
-const VIZ_LIT_TOP = [56, 196, 196];
-const VIZ_ROW_COLORS = Array.from({ length: VIZ_ROWS }, (_, row) => {
-  const t = row / (VIZ_ROWS - 1);
-  return `rgb(${VIZ_LIT_BOTTOM.map((v, k) => Math.round(v + (VIZ_LIT_TOP[k] - v) * t)).join(', ')})`;
+// The bar shows where the room is in its song, by the clock of the room
+// server, which the tab measures. The host, and participants with the
+// permission, drag it; the room moves there when the bar is let go.
+let seeking = false; // while the bar is held
+
+function roomPosition(room) {
+  const item = room && room.current;
+  if (!item) return 0;
+  const playback = room.playback;
+  const now = Date.now() + (view.clockOffset || 0);
+  const position = playback.playing ? playback.position + (now - playback.updatedAt) / 1000 : playback.position;
+  return Math.max(0, item.duration > 0 ? Math.min(position, item.duration) : position);
+}
+
+// Minutes and seconds, as 1:05, or with hours, as 1:02:05.
+function clock(seconds) {
+  const s = Math.floor(seconds);
+  const parts = s >= 3600 ? [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60] : [Math.floor(s / 60), s % 60];
+  return parts.map((n, i) => (i === 0 ? String(n) : String(n).padStart(2, '0'))).join(':');
+}
+
+// The part of the bar up to the position takes the accent.
+function paintSeek() {
+  const bar = $('seek');
+  const max = Number(bar.max) || 1;
+  bar.style.setProperty('--progress', `${(Number(bar.value) / max) * 100}%`);
+}
+
+function renderSeek() {
+  const room = view && view.room;
+  const item = room && room.current;
+  const bar = $('seek');
+  const known = Boolean(item && item.duration > 0);
+  bar.disabled = !known || !canControl();
+  $('seek-end').textContent = known ? clock(item.duration) : '';
+  if (seeking) return;
+  const position = roomPosition(room);
+  bar.max = String(known ? item.duration : 1);
+  bar.value = String(known ? position : 0);
+  $('seek-at').textContent = item ? clock(position) : '';
+  paintSeek();
+}
+
+setInterval(() => {
+  if (view && view.room && !seeking) renderSeek();
+}, 250);
+
+$('seek').addEventListener('pointerdown', () => {
+  seeking = true;
 });
-const VIZ_PEAK_COLOR = '#056672';
-const VIZ_OFF_COLOR = '#e6ece8';
-
-const viz = {
-  heights: new Float32Array(VIZ_BARS),
-  peaks: new Float32Array(VIZ_BARS),
-  peakAt: new Float64Array(VIZ_BARS),
-  lastFrameAt: 0,
-  playing: false,
-  still: matchMedia('(prefers-reduced-motion: reduce)').matches,
-};
-
-// A random value from 0 to 1 for a band and a step of time.
-function hash(i, n) {
-  const s = Math.sin(i * 127.1 + n * 311.7) * 43758.5453;
-  return s - Math.floor(s);
-}
-
-// The made-up beat takes new values eight times a second, as music does: a
-// kick on every beat in the low bands, a voice-like hump in the middle, and
-// hi-hats between the beats in the high bands.
-function beat(i, t) {
-  const x = i / (VIZ_BARS - 1);
-  const step = Math.floor(t * 8);
-  const phase = (t * 2) % 1;
-  const kick = phase < 0.125 ? 1 : 0;
-  const hat = Math.abs(phase - 0.5) < 0.0625 ? 1 : 0;
-  const bass = Math.max(0, 1 - x * 4);
-  const voice = Math.exp(-(((x - 0.32) / 0.16) ** 2));
-  const treble = Math.max(0, (x - 0.6) / 0.4);
-  let level = 0.1 + 0.6 * hash(i, step) * (0.5 + 0.6 * voice);
-  level += bass * (0.2 + 0.75 * kick) + treble * 0.7 * hat * hash(i + 50, step);
-  return Math.min(1, (level * (1 - x * 0.2) * 1.3) ** 1.4);
-}
-
-function drawViz(now) {
-  requestAnimationFrame(drawViz);
-  const canvas = $('viz');
-  if (canvas.offsetParent === null) return;
-  const elapsed = viz.lastFrameAt ? Math.min(0.1, (now - viz.lastFrameAt) / 1000) : 0;
-  viz.lastFrameAt = now;
-  // The canvas is drawn in device pixels, so that every segment has sharp edges.
-  const dpr = window.devicePixelRatio || 1;
-  const width = Math.round(canvas.clientWidth * dpr);
-  const height = Math.round(canvas.clientHeight * dpr);
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-
-  for (let i = 0; i < VIZ_BARS; i++) {
-    const target = viz.playing ? beat(i, viz.still ? 0 : now / 1000) : 0;
-    // Jump up at once and fall at a steady rate, as LED meters do.
-    viz.heights[i] = viz.still ? target : Math.max(target, viz.heights[i] - VIZ_FALL * elapsed);
-    if (viz.still || viz.heights[i] >= viz.peaks[i]) {
-      viz.peaks[i] = viz.heights[i];
-      viz.peakAt[i] = now;
-    } else if (now - viz.peakAt[i] > VIZ_PEAK_HOLD_MS) {
-      viz.peaks[i] = Math.max(viz.heights[i], viz.peaks[i] - VIZ_PEAK_FALL * elapsed);
-    }
-  }
-
-  const g = canvas.getContext('2d');
-  g.clearRect(0, 0, width, height);
-  const gap = Math.max(1, Math.round(VIZ_GAP * dpr));
-  const column = (width - gap * (VIZ_BARS - 1)) / VIZ_BARS;
-  const pitch = height / VIZ_ROWS;
-  const segment = Math.max(1, Math.round(pitch * 0.6));
-  // Row 0 is at the bottom.
-  const draw = (i, row) => {
-    const left = Math.round(i * (column + gap));
-    const bottom = Math.round(height - row * pitch);
-    g.fillRect(left, bottom - segment, Math.round(i * (column + gap) + column) - left, segment);
-  };
-  // While the room plays, the bottom segment stays lit as a base line.
-  const lit = Array.from(viz.heights, (h) => Math.max(viz.playing ? 1 : 0, Math.round(h * VIZ_ROWS)));
-  const peak = Array.from(viz.peaks, (p, i) => {
-    const row = Math.round(p * VIZ_ROWS) - 1;
-    return viz.playing && row >= lit[i] ? row : -1;
-  });
-
-  g.fillStyle = VIZ_OFF_COLOR;
-  for (let i = 0; i < VIZ_BARS; i++) {
-    for (let row = lit[i]; row < VIZ_ROWS; row++) if (row !== peak[i]) draw(i, row);
-  }
-  for (let row = 0; row < VIZ_ROWS; row++) {
-    g.fillStyle = VIZ_ROW_COLORS[row];
-    for (let i = 0; i < VIZ_BARS; i++) if (row < lit[i]) draw(i, row);
-  }
-  g.fillStyle = VIZ_PEAK_COLOR;
-  for (let i = 0; i < VIZ_BARS; i++) if (peak[i] >= 0) draw(i, peak[i]);
-}
+window.addEventListener('pointerup', () => {
+  seeking = false;
+});
+$('seek').addEventListener('input', () => {
+  seeking = true;
+  $('seek-at').textContent = clock(Number($('seek').value));
+  paintSeek();
+});
+$('seek').addEventListener('change', () => {
+  seeking = false;
+  post({ type: 'seek', position: Number($('seek').value) });
+});
 
 function songRow(track, subtitle, action, addedBy) {
   const li = document.createElement('li');
@@ -593,7 +626,14 @@ function songRow(track, subtitle, action, addedBy) {
   return li;
 }
 
-// Who added the song, after the artists: a small person and the name.
+// The place of a row's button, in a row that has none.
+function emptyAction() {
+  const slot = document.createElement('span');
+  slot.className = 'action-slot';
+  return slot;
+}
+
+// Who added the song, at the end of the line of the artists: a small person and the name.
 function showAddedBy(element, name) {
   element.hidden = !name;
   if (!name) return;
@@ -729,17 +769,22 @@ function showResults(message) {
   $('results-message').hidden = true;
   $('results').hidden = false;
   $('results').replaceChildren(...message.results.map((track) => {
-    const add = iconButton('icon-add', t('add'));
-    add.addEventListener('click', () => {
-      post({ type: 'add', track });
-      add.replaceChildren(icon('icon-check'));
-      add.disabled = true;
-      add.setAttribute('aria-label', t('added'));
-      add.title = t('added');
-    });
     const subtitle = [track.artists, formatDuration(track.duration)].filter(Boolean).join(' • ');
-    return songRow(track, subtitle, add);
+    return songRow(track, subtitle, addButton(track, 'add'));
   }));
+}
+
+// A button that adds a song to the queue, and then shows that it did.
+function addButton(track, label) {
+  const button = iconButton('icon-add', t(label));
+  button.addEventListener('click', () => {
+    post({ type: 'add', track });
+    button.replaceChildren(icon('icon-check'));
+    button.disabled = true;
+    button.setAttribute('aria-label', t('added'));
+    button.title = t('added');
+  });
+  return button;
 }
 
 function formatDuration(seconds) {
@@ -829,6 +874,89 @@ $('join-form').addEventListener('submit', (event) => {
   renderLobby();
 });
 
+// --- folding the queue ---
+
+// The queue grows down to the bottom of the window with one click, and folds
+// back with another. It keeps its state for the next popup. The switch keeps
+// the place in the list:
+// - Expanding leaves the list where it is and shows more songs below. Near the
+//   end of the list, the songs move down to fill the taller list.
+// - Folding again goes back to the place the folded list had. When the list
+//   was scrolled in between, the song at the top of what shows goes to the top
+//   of the folded list instead.
+
+// The first song that shows in the list.
+function topRow(scroller) {
+  const edge = Math.max(scroller.getBoundingClientRect().top, 0);
+  return [...scroller.querySelectorAll('li')].find((li) => li.getBoundingClientRect().bottom > edge + 1) || null;
+}
+
+function setupFold(button, panel, scroller, key) {
+  let open = false;
+  try {
+    open = localStorage.getItem(key) === 'open';
+  } catch {
+    // Remembering it is only a convenience.
+  }
+  let folded = null; // { listTop, listAfter }: where the list was before and after expanding
+  const apply = () => {
+    panel.classList.toggle('expanded', open);
+    button.setAttribute('aria-expanded', String(open));
+    const label = t(open ? 'foldList' : 'expandList');
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  };
+  apply();
+
+  // The button shows only while the songs do not fit in the folded queue. A
+  // queue whose songs fit is folded.
+  const fit = () => {
+    const last = scroller.lastElementChild;
+    const content = last ? last.offsetTop + last.offsetHeight : 0;
+    const foldedHeight = parseFloat(getComputedStyle(scroller).getPropertyValue('--queue-folded')) || 0;
+    const fits = content <= foldedHeight + 1;
+    button.classList.toggle('unneeded', fits);
+    button.tabIndex = fits ? -1 : 0;
+    if (fits && open) {
+      open = false;
+      folded = null;
+      apply();
+      remember();
+    }
+  };
+  const watcher = new ResizeObserver(fit);
+  watcher.observe(scroller);
+  for (const list of scroller.children) watcher.observe(list);
+
+  button.addEventListener('click', () => {
+    if (!open) {
+      folded = { listTop: scroller.scrollTop };
+      open = true;
+      apply();
+      folded.listAfter = scroller.scrollTop;
+    } else {
+      const back = folded && scroller.scrollTop === folded.listAfter ? folded : null;
+      const anchor = back ? null : topRow(scroller);
+      open = false;
+      apply();
+      if (back) scroller.scrollTop = back.listTop;
+      else if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      folded = null;
+    }
+    remember();
+  });
+
+  function remember() {
+    try {
+      localStorage.setItem(key, open ? 'open' : 'folded');
+    } catch {
+      // Remembering it is only a convenience.
+    }
+  }
+}
+
+setupFold($('queue-fold'), $('queue-panel'), $('queue-scroll'), 'queueFold');
+
 // --- settings ---
 
 // A server on this computer needs the site's permission to reach this computer,
@@ -837,10 +965,110 @@ $('open-site-settings').addEventListener('click', () => {
   chrome.tabs.create({ url: 'chrome://settings/content/siteDetails?site=' + encodeURIComponent('https://music.youtube.com') });
 });
 
-// The settings page opens in a tab of its own, which closes the popup.
-for (const id of ['settings', 'open-settings']) {
-  $(id).addEventListener('click', () => chrome.runtime.openOptionsPage());
+// The gear opens the settings in the popup, and closes them again. It stays
+// lit while they are open.
+function showSettings(open) {
+  settingsOpen = open;
+  $('settings-error').hidden = true;
+  showSaved(false);
+  render();
+  document.scrollingElement.scrollTop = 0;
+  if (open && !configured) $('server').focus();
 }
+
+$('settings').addEventListener('click', () => showSettings(!settingsOpen));
+$('open-settings').addEventListener('click', () => showSettings(true));
+
+// Saving turns the button into a check, which stays until a field changes
+// again. The words of the button tell readers of the screen.
+function showSaved(saved) {
+  const button = $('save');
+  button.classList.toggle('saved', saved);
+  if (saved) {
+    button.replaceChildren(icon('icon-check'));
+    button.setAttribute('aria-label', t('saved'));
+  } else {
+    button.textContent = t('save');
+    button.removeAttribute('aria-label');
+  }
+}
+
+// Shows what is wrong with a setting and puts the cursor in it.
+function refuseSetting(input, key) {
+  $('settings-error').textContent = t(key);
+  $('settings-error').hidden = false;
+  input.focus();
+  return null;
+}
+
+// Chrome lets the page of YouTube Music, which is HTTPS, reach a server over
+// HTTP only on this computer, so http:// is taken for these hosts alone.
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+// The address is kept without a trailing slash, as the tab adds the paths of
+// the API to it. The token travels in an HTTP header, which takes ASCII only.
+function readServer() {
+  const text = $('server').value.trim();
+  if (!text) return refuseSetting($('server'), 'enterServer');
+  if (!/^https?:\/\//i.test(text)) return refuseSetting($('server'), 'serverHttps');
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return refuseSetting($('server'), 'serverInvalid');
+  }
+  if (url.protocol === 'http:' && !LOOPBACK_HOSTS.includes(url.hostname)) return refuseSetting($('server'), 'serverHttps');
+  if (url.username || url.password || url.search || url.hash) return refuseSetting($('server'), 'serverInvalid');
+  const value = $('token').value.trim();
+  if (!value) return refuseSetting($('token'), 'enterToken');
+  if (!/^[\x21-\x7e]+$/.test(value)) return refuseSetting($('token'), 'tokenAscii');
+  return { server: url.origin + url.pathname.replace(/\/+$/, ''), token: value };
+}
+
+// A new language reloads the popup, so that every word changes at once, and
+// the popup opens on the settings again.
+$('language').addEventListener('change', async () => {
+  const chosen = $('language').value;
+  if (!LANGUAGES.includes(chosen)) return;
+  await chrome.storage.local.set({ language: chosen });
+  history.replaceState(null, '', '#settings');
+  location.reload();
+});
+
+// The service worker applies the way the button opens, from the next click of
+// the button. Leaving the side panel closes it at once.
+for (const radio of document.querySelectorAll('input[name="display"]')) {
+  radio.checked = radio.value === (inPanel ? 'panel' : 'window');
+  radio.addEventListener('change', () => {
+    if (radio.checked) chrome.storage.local.set({ display: radio.value === 'panel' ? 'panel' : 'window' });
+  });
+}
+
+// The tab of a room reads the server and the token when it creates or joins a
+// room, so a room keeps the server it began with.
+$('server-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  $('settings-error').hidden = true;
+  const settings = readServer();
+  if (!settings) return;
+  await chrome.storage.local.set(settings);
+  $('server').value = settings.server;
+  $('token').value = settings.token;
+  configured = true;
+  showSaved(true);
+  render();
+});
+
+for (const id of ['server', 'token']) {
+  $(id).addEventListener('input', () => {
+    $('settings-error').hidden = true;
+    showSaved(false);
+  });
+}
+
+$('language').value = language;
+$('server').value = server || '';
+$('token').value = token || '';
 
 // --- room ---
 
@@ -849,6 +1077,17 @@ $('copy-id').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(view.roomId);
     toast(t('copied'));
+  } catch {
+    toast(t('copyFailed'));
+  }
+});
+
+// The invite link opens YouTube Music and joins this room.
+$('copy-invite').addEventListener('click', async () => {
+  if (!view || !view.roomId) return;
+  try {
+    await navigator.clipboard.writeText(`${YTM_URL}?musictogether=${view.roomId}`);
+    toast(t('inviteCopied'));
   } catch {
     toast(t('copyFailed'));
   }
@@ -896,8 +1135,7 @@ showLobbyTab(lobbyTab);
 
 chrome.storage.local.get(['name', 'lastRoomId']).then(({ name, lastRoomId }) => {
   for (const input of document.querySelectorAll('input.name')) input.value = name || '';
-  if (lastRoomId) $('room-id').value = lastRoomId;
+  if (lastRoomId && !shownInvite) $('room-id').value = lastRoomId;
 });
 
-requestAnimationFrame(drawViz);
 refresh();

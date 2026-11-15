@@ -1,44 +1,101 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280" width="800" height="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 316" width="800" height="316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
   <!-- A white card, so that the diagram reads the same on light and dark pages. -->
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10z" fill="#68706b"/>
     </marker>
   </defs>
-  <rect x="0.5" y="0.5" width="799" height="279" rx="12" fill="#ffffff" stroke="#d9dfda"/>
+  <rect x="0.5" y="0.5" width="799" height="315" rx="12" fill="#ffffff" stroke="#d9dfda"/>
 
-  <!-- The members: each plays YouTube Music in their own Chrome. -->
+  <!-- The members: each one plays YouTube Music in their own Chrome, with the extension. The players stand at the same place in the same song. -->
   <g>
-    <rect x="24" y="24" width="300" height="64" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
-    <text x="44" y="51" font-size="15" font-weight="700" fill="#191d1b">Chrome of a member</text>
-    <text x="44" y="72" font-size="13" fill="#68706b">YouTube Music + the extension</text>
+    <circle cx="42" cy="61" r="8" fill="#087f8c"/>
+    <path d="M28 84 a14 13 0 0 1 28 0z" fill="#087f8c"/>
+    <rect x="68" y="40" width="276" height="60" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
+    <rect x="80" y="50" width="60" height="40" rx="4" fill="#ffffff" stroke="#c9d1cb"/>
+    <path d="M80 59h60" stroke="#d9dfda"/>
+    <circle cx="86" cy="54.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="91" cy="54.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="96" cy="54.5" r="1.6" fill="#c9d1cb"/>
+    <path d="M106 63l9 5.5-9 5.5z" fill="#087f8c"/>
+    <rect x="88" y="80" width="44" height="3" rx="1.5" fill="#d9dfda"/>
+    <rect x="88" y="80" width="16" height="3" rx="1.5" fill="#087f8c"/>
+    <text x="154" y="67" font-size="14" font-weight="700" fill="#191d1b">Chrome of a member</text>
+    <text x="154" y="85" font-size="12" fill="#68706b">YouTube Music + the extension</text>
   </g>
   <g>
-    <rect x="24" y="108" width="300" height="64" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
-    <text x="44" y="135" font-size="15" font-weight="700" fill="#191d1b">Chrome of a member</text>
-    <text x="44" y="156" font-size="13" fill="#68706b">YouTube Music + the extension</text>
+    <circle cx="42" cy="149" r="8" fill="#087f8c"/>
+    <path d="M28 172 a14 13 0 0 1 28 0z" fill="#087f8c"/>
+    <rect x="68" y="128" width="276" height="60" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
+    <rect x="80" y="138" width="60" height="40" rx="4" fill="#ffffff" stroke="#c9d1cb"/>
+    <path d="M80 147h60" stroke="#d9dfda"/>
+    <circle cx="86" cy="142.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="91" cy="142.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="96" cy="142.5" r="1.6" fill="#c9d1cb"/>
+    <path d="M106 151l9 5.5-9 5.5z" fill="#087f8c"/>
+    <rect x="88" y="168" width="44" height="3" rx="1.5" fill="#d9dfda"/>
+    <rect x="88" y="168" width="16" height="3" rx="1.5" fill="#087f8c"/>
+    <text x="154" y="155" font-size="14" font-weight="700" fill="#191d1b">Chrome of a member</text>
+    <text x="154" y="173" font-size="12" fill="#68706b">YouTube Music + the extension</text>
   </g>
   <g>
-    <rect x="24" y="192" width="300" height="64" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
-    <text x="44" y="219" font-size="15" font-weight="700" fill="#191d1b">Chrome of a member</text>
-    <text x="44" y="240" font-size="13" fill="#68706b">YouTube Music + the extension</text>
+    <circle cx="42" cy="237" r="8" fill="#087f8c"/>
+    <path d="M28 260 a14 13 0 0 1 28 0z" fill="#087f8c"/>
+    <rect x="68" y="216" width="276" height="60" rx="8" fill="#f6f7f5" stroke="#d9dfda"/>
+    <rect x="80" y="226" width="60" height="40" rx="4" fill="#ffffff" stroke="#c9d1cb"/>
+    <path d="M80 235h60" stroke="#d9dfda"/>
+    <circle cx="86" cy="230.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="91" cy="230.5" r="1.6" fill="#c9d1cb"/>
+    <circle cx="96" cy="230.5" r="1.6" fill="#c9d1cb"/>
+    <path d="M106 239l9 5.5-9 5.5z" fill="#087f8c"/>
+    <rect x="88" y="256" width="44" height="3" rx="1.5" fill="#d9dfda"/>
+    <rect x="88" y="256" width="16" height="3" rx="1.5" fill="#087f8c"/>
+    <text x="154" y="243" font-size="14" font-weight="700" fill="#191d1b">Chrome of a member</text>
+    <text x="154" y="261" font-size="12" fill="#68706b">YouTube Music + the extension</text>
   </g>
 
-  <!-- Commands go to the server; every change of the room comes back as an event. -->
+  <!-- Commands go to the room server, and every change of the room comes back. -->
   <g stroke="#68706b" stroke-width="1.6" fill="none">
-    <line x1="330" y1="56" x2="512" y2="112" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <line x1="330" y1="140" x2="512" y2="140" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <line x1="330" y1="224" x2="512" y2="168" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <line x1="350" y1="70" x2="528" y2="126" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <line x1="350" y1="158" x2="528" y2="158" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <line x1="350" y1="246" x2="528" y2="190" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   </g>
-  <text x="421" y="131" font-size="13" font-weight="700" fill="#68706b" text-anchor="middle">HTTPS + token</text>
+  <text x="439" y="149" font-size="13" font-weight="700" fill="#68706b" text-anchor="middle">HTTPS + token</text>
 
-  <!-- The room server keeps each room. -->
+  <!-- The room server, which one person in the group runs, keeps every room. -->
   <g>
-    <rect x="520" y="72" width="256" height="136" rx="8" fill="#eef9fa" stroke="#9bd5da"/>
-    <text x="540" y="104" font-size="16" font-weight="700" fill="#056672">Room server</text>
-    <text x="540" y="132" font-size="13" fill="#191d1b">Keeps the queue of each room</text>
-    <text x="540" y="152" font-size="13" fill="#191d1b">and its position in the song,</text>
-    <text x="540" y="172" font-size="13" fill="#191d1b">and sends every change</text>
-    <text x="540" y="192" font-size="13" fill="#191d1b">to the members</text>
+    <rect x="534" y="40" width="242" height="236" rx="10" fill="#eef9fa" stroke="#9bd5da"/>
+    <g stroke="#087f8c" stroke-width="1.5" fill="#ffffff">
+      <rect x="554" y="58" width="44" height="13" rx="3"/>
+      <rect x="554" y="75" width="44" height="13" rx="3"/>
+      <rect x="554" y="92" width="44" height="13" rx="3"/>
+    </g>
+    <g fill="#087f8c">
+      <circle cx="561" cy="64.5" r="2"/>
+      <circle cx="561" cy="81.5" r="2"/>
+      <circle cx="561" cy="98.5" r="2"/>
+    </g>
+    <g stroke="#9bd5da" stroke-width="1.5">
+      <path d="M570 64.5h20M570 81.5h20M570 98.5h20"/>
+    </g>
+    <text x="612" y="80" font-size="16" font-weight="700" fill="#056672">Room server</text>
+    <text x="612" y="99" font-size="12" fill="#68706b">run by one in the group</text>
+
+    <rect x="554" y="120" width="202" height="136" rx="8" fill="#ffffff" stroke="#9bd5da"/>
+    <text x="570" y="144" font-size="13" font-weight="700" fill="#191d1b">Room K7QMX</text>
+    <path d="M572 158l8 5-8 5z" fill="#087f8c"/>
+    <text x="588" y="167" font-size="12" fill="#191d1b">Playing at 1:23 of 3:45</text>
+    <g fill="#68706b">
+      <rect x="571" y="180" width="10" height="2" rx="1"/>
+      <rect x="571" y="185" width="10" height="2" rx="1"/>
+      <rect x="571" y="190" width="10" height="2" rx="1"/>
+    </g>
+    <text x="588" y="192" font-size="12" fill="#191d1b">Queue: 3 songs waiting</text>
+    <g fill="#68706b">
+      <circle cx="576" cy="207" r="3.2"/>
+      <path d="M569.5 220a6.5 6 0 0 1 13 0z"/>
+    </g>
+    <text x="588" y="217" font-size="12" fill="#191d1b">3 members</text>
+    <text x="570" y="243" font-size="11" fill="#68706b">Sends each change to all</text>
   </g>
 </svg>

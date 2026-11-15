@@ -20,7 +20,9 @@ import (
 // so requests carry YouTube Music's origin.
 const allowedOrigin = "https://music.youtube.com"
 
-const maxBodyBytes = 16 << 10
+// The largest body is the command addTracks with the songs of a long playlist:
+// up to 200 songs of about 1 KiB each, and far less in practice.
+const maxBodyBytes = 512 << 10
 
 // apiError is an error that the client is told about, with its HTTP status and
 // a machine-readable reason.
@@ -183,17 +185,24 @@ func (h *Hub) handleCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errBadRequest)
 		return
 	}
+	// The answer to addTracks also tells how many songs the queue took.
+	answer := map[string]any{"ok": true}
 	var err error
-	if req.Type == "close" {
+	switch req.Type {
+	case "close":
 		err = h.CloseRoom(r.PathValue("id"), req.SessionID, loggerFrom(r.Context()))
-	} else {
+	case "addTracks":
+		var added int
+		added, err = h.AddTracks(r.PathValue("id"), req.SessionID, req.Tracks)
+		answer["added"] = added
+	default:
 		err = h.Command(r.PathValue("id"), req.SessionID, req.Command)
 	}
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // handlePreflight answers CORS preflight requests. The extension sends JSON

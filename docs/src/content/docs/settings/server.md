@@ -83,7 +83,7 @@ A server behind Cloudflare listens on an address that only Cloudflare reaches, a
 | Songs that played, kept in a room | 50 |
 | Characters in a member's name | 30 |
 | Characters in a title, an artist list, or an album | 200 |
-| Days that an unused room is kept | 7 |
+| Time that an unused room is kept | 1 hour |
 | Seconds that a room plays after its last listener leaves | 30 |
-| Size of a request body | 16 KiB |
+| Size of a request body | 512 KiB |
 | Interval of the heartbeat line on an event stream | 15 seconds |

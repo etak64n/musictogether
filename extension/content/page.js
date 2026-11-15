@@ -31,20 +31,27 @@
   const MENU_ITEM_CLASS = 'musictogether-menu-item';
   const TOAST_ID = 'musictogether-toast';
   const TOAST_MS = 3000;
+  // The room takes at most this many songs of an album or a playlist at once.
+  const MAX_LIST_SONGS = 200;
   // The words that this script shows, in each language of the extension.
-  // content/room.js says which language, from the settings.
+  // content/room.js says which language, from the settings. {count} is a
+  // number of songs, always more than one in added_list.
   const STRINGS = {
     ja: {
       menu: 'Music Together に追加',
       added: 'Music Together のキューに追加しました',
+      added_list: '{count} 曲を Music Together のキューに追加しました',
+      partly_added: 'Music Together のキューがいっぱいになったため、{count} 曲だけ追加しました',
       queue_full: 'Music Together のキューがいっぱいです',
       failed: 'Music Together に追加できませんでした',
     },
     en: {
       menu: 'Add to Music Together',
       added: 'Added to the queue of Music Together',
+      added_list: 'Added {count} songs to the queue of Music Together',
+      partly_added: 'The queue of Music Together took {count} of the songs before it was full',
       queue_full: 'The queue of Music Together is full',
-      failed: 'Could not add the song to Music Together',
+      failed: 'Could not add to Music Together',
     },
   };
   let strings = STRINGS.en;
@@ -97,6 +104,9 @@
   let player = null;
   let app = null;
   let roomMode = false;
+  // Whether the menus offer "Add to Music Together": while a tab of this Chrome is
+  // in a room, in every tab of YouTube Music. content/room.js says so.
+  let menuMode = false;
   let ownUntil = 0;
   let pendingLoad = null; // { videoId, playing, until }
   let held = ''; // the song that was paused just before its end
@@ -319,44 +329,47 @@
     return text.split(':').reduce((total, part) => total * 60 + Number(part), 0);
   }
 
-  // --- "Add to Music Together" in YouTube Music's song menus ---
+  // --- "Add to Music Together" in YouTube Music's menus ---
 
   // Every menu opens in one shared popup, whose data lists the menu's items.
-  // A song's menu has an "Add to queue" item that names the song.
-  function songInMenu(popup) {
+  // The menu of a song has an "Add to queue" item that names the song, and the
+  // menu of an album or a playlist has one that names its list of songs.
+  function targetInMenu(popup) {
     const items = popup && popup.data && Array.isArray(popup.data.items) ? popup.data.items : [];
     for (let i = 0; i < items.length; i++) {
       const renderer = Object.values(items[i])[0] || {};
       const add = renderer.serviceEndpoint && renderer.serviceEndpoint.queueAddEndpoint;
-      const videoId = add && add.queueTarget && add.queueTarget.videoId;
-      if (videoId && add.queueInsertPosition === 'INSERT_AT_END') return { videoId, index: i };
+      if (!add || add.queueInsertPosition !== 'INSERT_AT_END' || !add.queueTarget) continue;
+      const { videoId, playlistId } = add.queueTarget;
+      if (videoId) return { videoId, key: videoId, index: i };
+      if (playlistId) return { playlistId, key: 'list:' + playlistId, index: i };
     }
     return null;
   }
 
-  // Puts the item right after "Add to queue" while in a room, and takes it
-  // out otherwise. YouTube Music re-renders the menu for every song, so this
-  // runs whenever the popup changes.
+  // Puts the item right after "Add to queue" while this Chrome is in a room, and
+  // takes it out otherwise. YouTube Music re-renders the menu for every song, so
+  // this runs whenever the popup changes.
   function decorateMenu() {
     const popup = document.querySelector('ytmusic-popup-container ytmusic-menu-popup-renderer');
     const list = popup && popup.querySelector('#items');
     if (!list) return;
     const existing = list.querySelector(':scope > .' + MENU_ITEM_CLASS);
-    const song = roomMode ? songInMenu(popup) : null;
-    const anchor = song ? [...list.children].filter((child) => child !== existing)[song.index] : null;
-    if (!song || !anchor) {
+    const target = roomMode || menuMode ? targetInMenu(popup) : null;
+    const anchor = target ? [...list.children].filter((child) => child !== existing)[target.index] : null;
+    if (!target || !anchor) {
       if (existing) existing.remove();
       return;
     }
-    if (existing && existing.dataset.videoId === song.videoId && existing.previousElementSibling === anchor) return;
+    if (existing && existing.dataset.target === target.key && existing.previousElementSibling === anchor) return;
     if (existing) existing.remove();
-    anchor.after(menuItem(song.videoId, popup));
+    anchor.after(menuItem(target, popup));
   }
 
-  function menuItem(videoId, popup) {
+  function menuItem(target, popup) {
     const item = document.createElement('div');
     item.className = MENU_ITEM_CLASS;
-    item.dataset.videoId = videoId;
+    item.dataset.target = target.key;
     item.setAttribute('role', 'menuitem');
     item.tabIndex = 0;
     const label = document.createElement('span');
@@ -367,7 +380,8 @@
       event.stopPropagation();
       const dropdown = popup.closest('tp-yt-iron-dropdown');
       if (dropdown && typeof dropdown.close === 'function') dropdown.close();
-      addToRoom(videoId);
+      if (target.videoId) addSong(target.videoId);
+      else addList(target.playlistId);
     };
     item.addEventListener('click', activate);
     item.addEventListener('keydown', (event) => {
@@ -399,29 +413,50 @@
 
   // The menu knows only the song's ID; YouTube Music's queue lookup gives its
   // title, artists, length and artwork, as when it adds a song to its own queue.
-  async function addToRoom(videoId) {
+  async function addSong(videoId) {
     let track = null;
     try {
       const response = await app.networkManager.fetch('/music/get_queue', { videoIds: [videoId] });
-      track = trackFromQueue(response, videoId);
+      const r = panelVideo(response?.queueDatas?.[0]);
+      if (r && r.videoId === videoId) track = trackOf(r);
     } catch {
       // Reported below.
     }
-    if (track) send({ type: 'menu-add', track });
+    if (track && track.title) send({ type: 'menu-add', track });
     else showToast('failed');
   }
 
-  function trackFromQueue(response, videoId) {
-    const content = response?.queueDatas?.[0]?.content;
-    const r = content?.playlistPanelVideoRenderer || content?.playlistPanelVideoWrapperRenderer?.primaryRenderer?.playlistPanelVideoRenderer;
-    if (!r || r.videoId !== videoId) return null;
+  // The same lookup with the ID of an album or a playlist gives all its songs,
+  // in order. The songs that YouTube Music cannot play here are left out.
+  async function addList(playlistId) {
+    let tracks = [];
+    try {
+      const response = await app.networkManager.fetch('/music/get_queue', { playlistId });
+      tracks = (response?.queueDatas || [])
+        .map(panelVideo)
+        .filter((r) => r && r.videoId && !r.unplayableText)
+        .map(trackOf)
+        .filter((track) => track.title);
+    } catch {
+      // Reported below.
+    }
+    if (tracks.length > 0) send({ type: 'menu-add-list', tracks: tracks.slice(0, MAX_LIST_SONGS) });
+    else showToast('failed');
+  }
+
+  function panelVideo(queueData) {
+    const content = queueData?.content;
+    return content?.playlistPanelVideoRenderer || content?.playlistPanelVideoWrapperRenderer?.primaryRenderer?.playlistPanelVideoRenderer || null;
+  }
+
+  function trackOf(r) {
     const text = (value) => (value?.runs || []).map((run) => run.text).join('');
     // The byline reads "artists • album • year" for songs and "artists • views • year" for videos.
     const artists = text(r.longBylineText || r.shortBylineText).split(' • ')[0].trim();
     const thumbnails = r.thumbnail?.thumbnails || [];
     const thumbnail = thumbnails.find((t) => t.width >= 120) || thumbnails[thumbnails.length - 1];
     return {
-      videoId,
+      videoId: r.videoId,
       title: text(r.title),
       artists,
       album: '',
@@ -432,7 +467,8 @@
 
   let toastTimer = 0;
 
-  function showToast(code) {
+  // count is the number of songs that an album or a playlist added.
+  function showToast(code, count) {
     let box = document.getElementById(TOAST_ID);
     if (!box) {
       box = document.createElement('div');
@@ -440,7 +476,8 @@
       box.setAttribute('role', 'status');
       document.body.append(box);
     }
-    box.textContent = strings[code] || strings.failed;
+    const key = code === 'added' && count > 1 ? 'added_list' : code;
+    box.textContent = (strings[key] || strings.failed).replace('{count}', String(count));
     box.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
@@ -486,6 +523,10 @@
         setRoomMode(Boolean(message.on));
         report();
         break;
+      case 'menu':
+        menuMode = Boolean(message.on);
+        decorateMenu();
+        break;
       case 'load':
         load(message);
         break;
@@ -502,7 +543,7 @@
         search(message);
         break;
       case 'toast':
-        showToast(message.code);
+        showToast(message.code, Number(message.count) || 0);
         break;
     }
   });

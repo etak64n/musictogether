@@ -28,8 +28,11 @@
   const STALL_NOTICE_MS = 5000;
   const NOTICE_MS = 5000;
   // How long the host has to take back ending the room.
-  const END_DELAY_MS = 10000;
+  const END_DELAY_MS = 5000;
   const OPTIMISTIC_MS = 2000;
+  // A pause of the listener's own takes this long to reach the player, which
+  // plays on until then.
+  const PAUSE_SETTLE_MS = 2000;
   const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30]; // seconds
   const REQUEST_TIMEOUT_MS = 10000;
   // How long a request to this computer waits while Chrome asks for the permission.
@@ -54,6 +57,7 @@
   // Whether this tab follows the room. The listener pausing their own player
   // makes it false, and playing again joins the room where it is now.
   let listening = true;
+  let pausedAt = 0; // when listening last became false
 
   // Player
   let page = null; // the latest status from page.js
@@ -67,6 +71,9 @@
   let stallNoticed = '';
 
   // Popup
+  // The room that an invite link named, while this tab waits for the name or
+  // the server to join it.
+  let invite = null;
   const ports = new Set();
   const searches = new Map(); // our request ID -> { port, reqId }
   let searchSeq = 0;
@@ -97,6 +104,7 @@
       case 'ready':
         pageReady = true;
         sendLanguage();
+        sendMenuState();
         if (conn) toPage({ type: 'mode', on: true });
         publish();
         break;
@@ -114,10 +122,21 @@
         deliverSearch(message);
         break;
       case 'menu-add':
-        addFromMenu(message.track);
+        addFromMenu({ track: message.track });
+        break;
+      case 'menu-add-list':
+        addFromMenu({ tracks: message.tracks });
         break;
     }
   });
+
+  // Every tab of YouTube Music offers "Add to Music Together" in its menus while
+  // a tab of this Chrome is in a room, whether or not it is this tab.
+  let browserInRoom = false;
+
+  function sendMenuState() {
+    if (pageReady) toPage({ type: 'menu', on: browserInRoom || Boolean(conn) });
+  }
 
   // page.js shows a menu item and short notices in YouTube Music, in the
   // language of the settings. Until the language is set, it is Chrome's:
@@ -142,7 +161,7 @@
 
   // --- server ---
 
-  // The room server from the settings page: its address, which starts with
+  // The room server from the settings: its address, which starts with
   // https://, or http:// for a server on this computer, and its token. A room
   // keeps the server it was joined on.
   async function loadServer() {
@@ -472,20 +491,43 @@
     }
   }
 
-  // A song added from YouTube Music's own menu. The page shows the result,
-  // because the popup is usually closed at that moment.
-  async function addFromMenu(track) {
-    if (!conn || status !== 'connected' || !conn.sessionId) {
-      toPage({ type: 'toast', code: 'failed' });
-      return;
-    }
+  // Adds what was chosen in a menu of YouTube Music, in this tab or in another
+  // one: { track } for a song, or { tracks } for the songs of an album or a
+  // playlist. Tells how it went as { code, count }: the code is added,
+  // partly_added when the queue took only some of the songs, queue_full, or
+  // failed, and count is the number of songs added.
+  async function addSongs(songs) {
+    if (!conn || status !== 'connected' || !conn.sessionId) return { code: 'failed', count: 0 };
     const c = conn;
     try {
-      await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'add', track });
-      toPage({ type: 'toast', code: 'added' });
+      if (songs.track) {
+        await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'add', track: songs.track });
+        return { code: 'added', count: 1 };
+      }
+      const response = await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, type: 'addTracks', tracks: songs.tracks });
+      const { added } = await response.json();
+      return { code: added < songs.tracks.length ? 'partly_added' : 'added', count: added };
     } catch (e) {
-      toPage({ type: 'toast', code: e.code === 'queue_full' ? 'queue_full' : 'failed' });
+      return { code: e.code === 'queue_full' ? 'queue_full' : 'failed', count: 0 };
     }
+  }
+
+  // Songs added from YouTube Music's own menu. The page shows the result,
+  // because the popup is usually closed at that moment.
+  async function addFromMenu(songs) {
+    let result = { code: 'failed', count: 0 };
+    if (conn) {
+      result = await addSongs(songs);
+    } else {
+      // A tab outside the room passes the songs to the tab in the room.
+      try {
+        const answer = await chrome.runtime.sendMessage({ type: 'add-to-room', songs });
+        if (answer && answer.code) result = answer;
+      } catch {
+        // The extension was reloaded or updated.
+      }
+    }
+    toPage({ type: 'toast', code: result.code, count: result.count });
   }
 
   // The room plays while anyone listens. Listening again to a room that
@@ -493,6 +535,7 @@
   // told even when nothing changed here, in case it missed the last time.
   function setListening(value) {
     if (value && !listening) alignedVideo = '';
+    if (!value) pausedAt = Date.now();
     listening = value;
     if (conn && status === 'connected' && conn.sessionId) {
       command({ type: 'listening', value }, (r) => {
@@ -589,9 +632,16 @@
   // match the room. An idle room leaves the tab alone.
   function sync() {
     if (!conn || status !== 'connected' || !pageReady || !page || !room) return;
-    // A listener who paused their own player is left alone until they play again.
+    // A listener who paused their own player is left alone until they play
+    // again. Playing again counts however the player starts: from the buttons
+    // of YouTube Music, from a song held at its end while the room moved on, or
+    // from YouTube Music moving on to a song of its own. The tab then plays the
+    // room's song where the room is.
     if (!listening) {
       stalledSince = 0;
+      if (room.current && page.state === PLAYING && !page.ad && Date.now() - pausedAt > PAUSE_SETTLE_MS) {
+        setListening(true);
+      }
       return;
     }
     const want = wanted();
@@ -716,10 +766,13 @@
       error,
       roomId: conn ? conn.roomId : null,
       memberId: conn ? conn.memberId : null,
+      invite,
       listening,
       room,
       notice: notice && notice.until > Date.now() ? { id: notice.id, code: notice.code } : null,
       endingUntil: ending ? ending.until : null,
+      // The popup's seek bar reads the room's timeline by the server's clock.
+      clockOffset,
     };
   }
 
@@ -782,9 +835,11 @@
   function onPopupMessage(port, message) {
     switch (message.type) {
       case 'create':
+        invite = null;
         if (!busy) createRoom(message.name);
         break;
       case 'join':
+        invite = null;
         if (!busy) startJoin(message.roomId, message.name);
         break;
       case 'leave':
@@ -810,6 +865,11 @@
       case 'next':
         if (!room || !room.current) break;
         if (canControl()) sendNext(room.current.id);
+        else showNotice('host_only');
+        break;
+      case 'seek':
+        if (!room || !room.current || !Number.isFinite(message.position)) break;
+        if (canControl()) seekTo(message.position);
         else showNotice('host_only');
         break;
       case 'participantControl':
@@ -839,9 +899,21 @@
     port.postMessage({ type: 'view', view: view() });
   });
 
-  // The service worker asks this tab to leave when another tab joins a room.
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === 'leave-room') leaveRoom();
+  // The service worker asks this tab to leave when another tab joins a room,
+  // tells it whether this Chrome is in a room, and passes it the songs that
+  // other tabs add from their menus.
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message) return false;
+    if (message.type === 'leave-room') leaveRoom();
+    if (message.type === 'room-state') {
+      browserInRoom = Boolean(message.inRoom);
+      sendMenuState();
+    }
+    if (message.type === 'add-from-menu') {
+      addSongs(message.songs).then(sendResponse);
+      return true;
+    }
+    return false;
   });
 
   // --- helpers ---
@@ -865,18 +937,45 @@
     }
   }
 
+  // --- invite links ---
+
+  // An invite link opens YouTube Music with the room's ID in the address, as in
+  // https://music.youtube.com/?musictogether=K7QMX. YouTube Music takes it out
+  // of the address before this script runs, so content/invite.js, which runs
+  // first, leaves it here.
+  const ROOM_ID_PATTERN = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/;
+
+  function takeInvite() {
+    const value = typeof globalThis.musictogetherInvite === 'string' ? globalThis.musictogetherInvite : '';
+    delete globalThis.musictogetherInvite;
+    const roomId = value.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    return ROOM_ID_PATTERN.test(roomId) ? roomId : null;
+  }
+
   // --- start ---
 
   toPage({ type: 'hello' });
 
-  // A tab that was in a room before the page reloaded joins the room again.
+  // A tab opened from an invite link joins that room under the name and with the
+  // server of the settings. Without them, the popup's lobby shows the room until
+  // the name is entered and Join is clicked. A tab that was in a room before the
+  // page reloaded joins the room again.
   (async () => {
+    const invited = takeInvite();
     try {
       const answer = await chrome.runtime.sendMessage({ type: 'which-room' });
-      if (!answer || !answer.roomId) return;
+      browserInRoom = Boolean(answer && answer.inRoom);
+      sendMenuState();
+      const roomId = invited || (answer && answer.roomId);
+      if (!roomId) return;
       const { name } = await chrome.storage.local.get('name');
       const server = await loadServer();
-      if (name && server) joinRoom(answer.roomId, name, true, server);
+      if (name && server) {
+        joinRoom(roomId, name, !invited, server);
+      } else if (invited) {
+        invite = invited;
+        publish();
+      }
     } catch {
       // The extension was reloaded or updated.
     }

@@ -81,7 +81,7 @@ curl -H "Authorization: Bearer a-long-token-of-your-own" https://music.example.c
 ## Tell the members
 
 The people who listen with you enter two values in the settings of the extension: the address of the server, such as `https://music.example.com`, and its token.
-[Install the extension](/musictogether/getting-started/extension/) describes the settings page.
+[Install the extension](/musictogether/getting-started/extension/) describes the settings.
 
 ## Update the server
 

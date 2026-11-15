@@ -67,7 +67,8 @@ type State struct {
 	// HostID is the member ID of the browser that created the room.
 	HostID string `json:"hostId"`
 	// ParticipantControl lets members other than the host seek, skip and
-	// reorder the queue. Only the host can change it.
+	// reorder the queue. A new room starts with it on, and only the host can
+	// change it.
 	ParticipantControl bool   `json:"participantControl"`
 	Current            *Item  `json:"current"`
 	Queue              []Item `json:"queue"`
@@ -80,6 +81,7 @@ type State struct {
 type Command struct {
 	Type     string   `json:"type"`
 	Track    *Track   `json:"track,omitempty"`
+	Tracks   []Track  `json:"tracks,omitempty"`
 	ItemID   string   `json:"itemId,omitempty"`
 	Position *float64 `json:"position,omitempty"`
 	Index    *int     `json:"index,omitempty"`
@@ -116,15 +118,7 @@ func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 		if len(s.Queue) >= maxQueueItems {
 			return false, errQueueFull
 		}
-		s.NextItemID++
-		item := Item{ID: strconv.FormatInt(s.NextItemID, 10), Track: track, AddedBy: by.Name, AddedByID: by.ID}
-		if s.Current == nil {
-			// An idle room starts playing the first song that is added.
-			s.Current = &item
-			s.Playback = Playback{Playing: true, UpdatedAt: now}
-		} else {
-			s.Queue = append(s.Queue, item)
-		}
+		s.addItem(track, by, now)
 	case "remove":
 		i := slices.IndexFunc(s.Queue, func(it Item) bool { return it.ID == c.ItemID })
 		if i < 0 {
@@ -188,6 +182,51 @@ func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 	s.Version++
 	s.LastActiveAt = now
 	return true, nil
+}
+
+// AddTracks adds the songs of an album or a playlist to the end of the queue,
+// in their order, as many as the queue has room for, and reports how many it
+// added. Anyone in the room can add songs. The songs are all checked first, so
+// that one bad song adds none of them. In a room where nothing plays, the
+// first song starts at once.
+func (s *State) AddTracks(tracks []Track, by member, now int64) (int, error) {
+	if len(tracks) == 0 || len(tracks) > maxQueueItems {
+		return 0, errBadRequest
+	}
+	checked := make([]Track, 0, len(tracks))
+	for _, t := range tracks {
+		track, ok := normalizeTrack(t)
+		if !ok {
+			return 0, errBadRequest
+		}
+		checked = append(checked, track)
+	}
+	added := 0
+	for _, track := range checked {
+		if len(s.Queue) >= maxQueueItems {
+			break
+		}
+		s.addItem(track, by, now)
+		added++
+	}
+	if added == 0 {
+		return 0, errQueueFull
+	}
+	s.Version++
+	s.LastActiveAt = now
+	return added, nil
+}
+
+// addItem puts a song at the end of the queue. An idle room starts playing it.
+func (s *State) addItem(track Track, by member, now int64) {
+	s.NextItemID++
+	item := Item{ID: strconv.FormatInt(s.NextItemID, 10), Track: track, AddedBy: by.Name, AddedByID: by.ID}
+	if s.Current == nil {
+		s.Current = &item
+		s.Playback = Playback{Playing: true, UpdatedAt: now}
+	} else {
+		s.Queue = append(s.Queue, item)
+	}
 }
 
 // PositionAt returns where the shared timeline is at the given time.

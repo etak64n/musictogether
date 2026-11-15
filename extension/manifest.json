@@ -22,10 +22,6 @@
   "side_panel": {
     "default_path": "popup/popup.html"
   },
-  "options_ui": {
-    "page": "options/options.html",
-    "open_in_tab": true
-  },
   "background": {
     "service_worker": "background.js"
   },
@@ -38,6 +34,15 @@
     "https://music.youtube.com/*"
   ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://music.youtube.com/*"
+      ],
+      "js": [
+        "content/invite.js"
+      ],
+      "run_at": "document_start"
+    },
     {
       "matches": [
         "https://music.youtube.com/*"

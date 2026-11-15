@@ -1,8 +1,8 @@
 // Remembers which tab is in a room, so that the popup can find that tab and a
 // reloaded tab can rejoin. A browser is in at most one room at a time.
 
-// The toolbar button opens the popup in one of two ways, as the settings page
-// says: a mini window under the button, which is the default, or Chrome's side
+// The toolbar button opens the popup in one of two ways, as the settings
+// say: a mini window under the button, which is the default, or Chrome's side
 // panel on the right of the window. The side panel is turned off while the
 // mini window is chosen, so that it does not show in Chrome's list of panels.
 async function applyDisplay() {
@@ -79,6 +79,13 @@ function showQueueCount(count) {
   chrome.action.setBadgeText({ text: count > 0 ? String(Math.min(count, 99)) : '' });
 }
 
+// Every tab of YouTube Music shows "Add to Music Together" in its menus while a
+// tab of this Chrome is in a room, so every tab hears when that changes.
+async function tellTabs(inRoom) {
+  const tabs = await chrome.tabs.query({ url: 'https://music.youtube.com/*' });
+  for (const tab of tabs) chrome.tabs.sendMessage(tab.id, { type: 'room-state', inRoom }).catch(() => {});
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab && sender.tab.id;
   if (tabId === undefined || !message) return false;
@@ -90,6 +97,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (previous && previous.tabId !== tabId) {
         chrome.tabs.sendMessage(previous.tabId, { type: 'leave-room' }).catch(() => {});
       }
+      tellTabs(true);
       sendResponse({ ok: true });
     });
     return true;
@@ -100,6 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (current && current.tabId === tabId) {
         await chrome.storage.session.remove('roomTab');
         showQueueCount(0);
+        tellTabs(false);
       }
       sendResponse({ ok: true });
     });
@@ -113,9 +122,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  // Songs chosen in the menu of a tab outside the room go to the tab in the
+  // room, which adds them, and the answer comes back to the tab that chose them.
+  if (message.type === 'add-to-room') {
+    const failed = { code: 'failed', count: 0 };
+    getRoomTab().then(async (current) => {
+      if (!current || current.tabId === tabId) {
+        sendResponse(failed);
+        return;
+      }
+      try {
+        const answer = await chrome.tabs.sendMessage(current.tabId, { type: 'add-from-menu', songs: message.songs });
+        sendResponse(answer && answer.code ? answer : failed);
+      } catch {
+        sendResponse(failed);
+      }
+    });
+    return true;
+  }
+
   if (message.type === 'which-room') {
     getRoomTab().then((current) => {
-      sendResponse({ roomId: current && current.tabId === tabId ? current.roomId : null });
+      sendResponse({ roomId: current && current.tabId === tabId ? current.roomId : null, inRoom: Boolean(current) });
     });
     return true;
   }
@@ -128,5 +156,6 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   if (current && current.tabId === tabId) {
     await chrome.storage.session.remove('roomTab');
     showQueueCount(0);
+    tellTabs(false);
   }
 });

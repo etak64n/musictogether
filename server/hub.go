@@ -29,9 +29,10 @@ const (
 	// A room keeps playing this long after its last listener disconnects, so
 	// that a listener who is only reconnecting does not stop the music.
 	listenerGrace = 30 * time.Second
-	// Rooms that nobody has joined or changed for this long are deleted.
-	roomLifetime    = 7 * 24 * time.Hour
-	cleanupInterval = 10 * time.Minute
+	// A room that nobody is in, and that nobody has joined or changed for
+	// this long, is deleted. The rooms are checked this often.
+	roomLifetime    = time.Hour
+	cleanupInterval = time.Minute
 
 	// A client that falls this many messages behind is dropped; it then
 	// reconnects and starts again from a fresh snapshot.
@@ -88,9 +89,12 @@ type helloEvent struct {
 	MemberID  string `json:"memberId"`
 }
 
+// member is a person in the room. Listening is true while the member's own
+// player plays; the others see it next to the name.
 type member struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Listening bool   `json:"listening"`
 }
 
 // roomView is what members receive: the room's state, the server's clock, and who is in the room.
@@ -153,7 +157,8 @@ func (h *Hub) CreateRoom(addr, clientID string, log *slog.Logger) (string, error
 		id = newRoomID()
 	}
 	ms := now.UnixMilli()
-	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), Queue: []Item{}, History: []Item{}}
+	// A new room lets participants seek, skip and reorder; the host can turn it off.
+	st := State{ID: id, CreatedAt: ms, LastActiveAt: ms, HostID: memberID(id, clientID), ParticipantControl: true, Queue: []Item{}, History: []Item{}}
 	if err := h.store.Save(st); err != nil {
 		return "", fmt.Errorf("save new room: %w", err)
 	}
@@ -249,10 +254,14 @@ func (h *Hub) Command(roomID, sessionID string, c Command) error {
 	}
 	now := h.now()
 	changed := false
+	// The others see who listens, so a member who pauses or plays again is
+	// sent to everyone even when the room itself does not change.
+	membersChanged := false
 	if c.Type == "listening" {
 		if c.Value == nil {
 			return errBadRequest
 		}
+		membersChanged = sess.Listening != *c.Value
 		sess.Listening = *c.Value
 	} else {
 		var err error
@@ -267,9 +276,37 @@ func (h *Hub) Command(roomID, sessionID string, c Command) error {
 	}
 	if changed {
 		h.saveLocked(room)
+	}
+	if changed || membersChanged {
 		h.broadcastLocked(room, now)
 	}
 	return nil
+}
+
+// AddTracks adds the songs of an album or a playlist for one member, as many
+// as the queue has room for, and sends the new state to everyone in the room.
+// It reports how many songs it added.
+func (h *Hub) AddTracks(roomID, sessionID string, tracks []Track) (int, error) {
+	room := h.room(roomID)
+	if room == nil {
+		return 0, errRoomNotFound
+	}
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	sess := room.sessionLocked(sessionID)
+	if sess == nil {
+		return 0, errNotMember
+	}
+	now := h.now()
+	added, err := room.state.AddTracks(tracks, member{ID: sess.MemberID, Name: sess.Name}, now.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	// The first song added to an idle room starts only if someone listens.
+	h.followListenersLocked(room, now)
+	h.saveLocked(room)
+	h.broadcastLocked(room, now)
+	return added, nil
 }
 
 // CloseRoom deletes the room at its host's request. Every member is told
@@ -491,7 +528,8 @@ func (h *Hub) frame(event string, v any) ([]byte, bool) {
 }
 
 // membersOf lists the room's members in the order they joined. A browser with
-// two sessions open counts once, under the name it joined with most recently.
+// two sessions open counts once, under the name it joined with most recently,
+// and listens while either session listens.
 func membersOf(sessions map[*Session]struct{}) []member {
 	list := slices.SortedFunc(maps.Keys(sessions), func(a, b *Session) int { return a.joinedAt.Compare(b.joinedAt) })
 	members := []member{}
@@ -499,10 +537,11 @@ func membersOf(sessions map[*Session]struct{}) []member {
 	for _, s := range list {
 		if i, ok := index[s.MemberID]; ok {
 			members[i].Name = s.Name
+			members[i].Listening = members[i].Listening || s.Listening
 			continue
 		}
 		index[s.MemberID] = len(members)
-		members = append(members, member{ID: s.MemberID, Name: s.Name})
+		members = append(members, member{ID: s.MemberID, Name: s.Name, Listening: s.Listening})
 	}
 	return members
 }

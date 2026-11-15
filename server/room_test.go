@@ -310,6 +310,74 @@ func TestQueueHasALimit(t *testing.T) {
 	}
 }
 
+func trackList(videoIDs ...string) []Track {
+	list := make([]Track, 0, len(videoIDs))
+	for _, id := range videoIDs {
+		list = append(list, *testTrack(id))
+	}
+	return list
+}
+
+func TestAddTracksKeepsTheirOrder(t *testing.T) {
+	s := newState()
+	added, err := s.AddTracks(trackList("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), guest, 1000)
+	if err != nil || added != 3 {
+		t.Fatalf("AddTracks = %d, %v; want 3 songs added", added, err)
+	}
+	// In an idle room, the first song plays and the others wait in their order.
+	if s.Current == nil || s.Current.VideoID != "aaaaaaaaaaa" || !s.Playback.Playing {
+		t.Errorf("Current = %+v, Playback = %+v; want the first song playing", s.Current, s.Playback)
+	}
+	if got := queued(&s); got != "bc" {
+		t.Errorf("queue = %q; want \"bc\"", got)
+	}
+	for _, it := range append([]Item{*s.Current}, s.Queue...) {
+		if it.AddedBy != guest.Name || it.AddedByID != guest.ID {
+			t.Errorf("item %s added by %q (%s); want いぬ", it.VideoID, it.AddedBy, it.AddedByID)
+		}
+	}
+	if s.Version != 1 {
+		t.Errorf("Version = %d; want 1, one change for the whole list", s.Version)
+	}
+}
+
+func TestAddTracksStopsAtTheLimit(t *testing.T) {
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	for range maxQueueItems - 2 {
+		add(t, &s, "bbbbbbbbbbb", host, 1000)
+	}
+
+	added, err := s.AddTracks(trackList("ccccccccccc", "ddddddddddd", "eeeeeeeeeee"), guest, 2000)
+	if err != nil || added != 2 {
+		t.Fatalf("AddTracks = %d, %v; want the 2 songs that fit", added, err)
+	}
+	if last := s.Queue[len(s.Queue)-1].VideoID; len(s.Queue) != maxQueueItems || last != "ddddddddddd" {
+		t.Errorf("queue has %d songs ending with %s; want %d ending with the second new song", len(s.Queue), last, maxQueueItems)
+	}
+
+	if _, err := s.AddTracks(trackList("fffffffffff"), guest, 3000); !errors.Is(err, errQueueFull) {
+		t.Errorf("AddTracks to a full queue: err = %v; want queue_full", err)
+	}
+}
+
+func TestAddTracksChecksEverySong(t *testing.T) {
+	bad := append(trackList("aaaaaaaaaaa"), Track{VideoID: "short", Title: "Song"})
+	tooMany := make([]Track, maxQueueItems+1)
+	for i := range tooMany {
+		tooMany[i] = *testTrack("aaaaaaaaaaa")
+	}
+	for name, list := range map[string][]Track{"one bad song": bad, "no songs": nil, "too many songs": tooMany} {
+		s := newState()
+		if _, err := s.AddTracks(list, host, 1000); !errors.Is(err, errBadRequest) {
+			t.Errorf("%s: err = %v; want bad_request", name, err)
+		}
+		if s.Current != nil || s.Version != 0 {
+			t.Errorf("%s: the room changed: %+v", name, s)
+		}
+	}
+}
+
 func TestTracksAreChecked(t *testing.T) {
 	bad := []Track{
 		{VideoID: "short", Title: "Song"},
