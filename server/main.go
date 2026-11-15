@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const version = "0.3.6"
+const version = "0.3.7"
 
 // minTokenLength keeps the token from being one that is quick to guess.
 const minTokenLength = 8
