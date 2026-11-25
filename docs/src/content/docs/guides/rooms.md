@@ -11,6 +11,10 @@ The browser that creates a room is the room's **host**, and everyone else in the
 
 The labels on this page are those of the English screens. The extension shows its screens in the language of Chrome, Japanese or English, until another language is chosen in its settings.
 
+<video class="demo-video compact" autoplay loop muted playsinline controls aria-label="Popup tour: searching and adding a song, shuffling Main, opening Standby, and copying the invite link.">
+  <source src="/musictogether/demos/tour-demo.mp4" type="video/mp4" />
+</video>
+
 ## Create a room
 
 1. Open YouTube Music, and click the button of Music Together. The popup opens in a mini window below the button, or in the side panel on the right of the window, as the settings choose.
@@ -44,7 +48,7 @@ A room has two queues of songs that wait:
 
 A song added to Standby takes a random place in it, so that a whole album or playlist that one person adds mixes with the songs of the others. A song dropped at a place in Standby keeps that place.
 
-The panel Main of the popup lists the songs that have played in gray, up to the last 50, then the song that plays in a frame, then the songs that wait in Main, then Standby. Standby is folded below Main, with the number of its songs; a click on its heading opens it. When a song finishes, the list scrolls so that the song that played last is at its top.
+The panel Main of the popup shows the number of songs waiting in Main next to its heading, and lists the songs that have played in gray, up to the last 50, then the song that plays in a frame, then the songs that wait in Main, then Standby. Standby is folded below Main, with the number of its songs; a click on its heading opens it. When a song finishes, the list scrolls so that the song that played last is at its top.
 The list shows a few songs at a time. When its songs do not fit, an arrow at its top makes it reach down to the bottom of the window, and folds it again; the songs that showed at the top stay in view through both. A longer list scrolls.
 
 ## Add songs
@@ -75,10 +79,11 @@ Chrome keeps the window well inside the screen: at most about two thirds of the 
 
 YouTube Music installed as an app runs in a window of its own, which has no side panel. Its tabs follow rooms as tabs in Chrome do. The button of Music Together is in the menu of extensions, the puzzle piece, in the title bar of the app's window, and opens the mini window whatever the settings choose. The note for the window on top is not in the app's top bar.
 
-## Reorder the queues
+## Reorder and shuffle the queues
 
 Drag a waiting song up or down: within Main, within Standby, or across the heading of Standby from one queue to the other. Over a folded Standby, the song goes to the end of Standby. The songs that have played stay where they are.
-Reordering needs the host, or the host's permission, which a new room gives to participants.
+To shuffle the songs waiting in Main at once, click the shuffle button at the top right of Main (shown when at least two songs are waiting). The song that plays, the history, and Standby stay as they are.
+Reordering and shuffling need the host, or the host's permission, which a new room gives to participants.
 
 ## Pause your own player
 

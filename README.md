@@ -8,6 +8,15 @@ Nothing is streamed: each person plays YouTube Music with their own account, and
 
 **Documentation:** https://etak64n.github.io/musictogether/
 
+![Two members in a Music Together room: Maya searches and adds a song, Alex shuffles Main, and skips to the next song — both Chrome popups stay in sync in real time.](images/demo-sync.gif)
+
+<details>
+<summary>Feature tour (search, shuffle, send invite link & join)</summary>
+
+<img src="images/demo-tour.gif" alt="Music Together Chrome extension tour: searching and adding a song, shuffling Main, copying and sending the invite link in chat, and a friend joining the room." width="520">
+
+</details>
+
 Music Together is not affiliated with Google or YouTube. It relies on parts of YouTube Music that are not documented, so a change to YouTube Music can stop it from working.
 
 ## How it works
@@ -21,7 +30,7 @@ Each extension computes the position from the timeline, and moves its own player
 ## Features
 
 - **Invite links.** The host copies a link that opens YouTube Music and joins the room.
-- **Two shared queues.** Everyone in a room adds songs to Main, which plays first, or to Standby, which plays once Main is empty and mixes the songs that it gets at random places. Songs come from the search of the popup, from the ⋮ menu of a song, an album, or a playlist in YouTube Music, or by dragging one from YouTube Music to a place in the queues. The queues are reordered by dragging, and the songs that have played stay at the top in gray, ready to be added again.
+- **Two shared queues.** Everyone in a room adds songs to Main, which plays first, or to Standby, which plays once Main is empty and mixes the songs that it gets at random places. Songs come from the search of the popup, from the ⋮ menu of a song, an album, or a playlist in YouTube Music, or by dragging one from YouTube Music to a place in the queues. The queues are reordered by dragging, Main can be shuffled with one click, and the songs that have played stay at the top in gray, ready to be added again.
 - **Main as a playlist.** The songs of Main, those that played and those that wait, are saved as a private playlist of your YouTube Music with one click.
 - **The same moment.** The room plays while anyone listens. Pausing stops your own player only, and playing again joins the room where it is now. Everyone sees who is listening.
 - **A host.** The host decides whether participants may skip, seek, and reorder, and ends the room.

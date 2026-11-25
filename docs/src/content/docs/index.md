@@ -9,6 +9,10 @@ The extension makes the players of everyone in a **room** play the same song at 
 A room is kept by a **room server**, a small program that one person in the group runs on a machine of their own.
 The room server answers only the people who know its token.
 
+<video class="demo-video" autoplay loop muted playsinline controls aria-label="Demo of two Chrome extensions staying in sync while adding a song, shuffling Main, and skipping to the next song.">
+  <source src="/musictogether/demos/sync-demo.mp4" type="video/mp4" />
+</video>
+
 The source and the releases are on [GitHub](https://github.com/etak64n/musictogether). Music Together is released under the MIT License.
 Music Together is not affiliated with Google or YouTube. It relies on parts of YouTube Music that are not documented, so a change to YouTube Music can stop it from working.
 
