@@ -11,9 +11,9 @@ Nothing is streamed: each person plays YouTube Music with their own account, and
 ![Two members in a Music Together room: Maya searches and adds a song, Alex shuffles Main, and skips to the next song — both Chrome popups stay in sync in real time.](images/demo-sync.gif)
 
 <details>
-<summary>Feature tour (search, shuffle, Standby, invite link)</summary>
+<summary>Feature tour (search, shuffle, send invite link & join)</summary>
 
-<img src="images/demo-tour.gif" alt="Music Together popup feature tour: searching and adding a song, shuffling Main, opening Standby, and copying the invite link." width="360">
+<img src="images/demo-tour.gif" alt="Music Together Chrome extension tour: searching and adding a song, shuffling Main, copying and sending the invite link in chat, and a friend joining the room." width="520">
 
 </details>
 

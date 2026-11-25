@@ -15,7 +15,7 @@
 .demo-video {
   display: block;
   width: 100%;
-  max-width: 720px;
+  max-width: 840px;
   margin: 1.25rem 0;
   border: 1px solid var(--sl-color-hairline);
   border-radius: 10px;
@@ -23,5 +23,5 @@
 }
 
 .demo-video.compact {
-  max-width: 380px;
+  max-width: 520px;
 }
