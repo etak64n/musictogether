@@ -485,7 +485,7 @@
   async function command(body, apply) {
     if (!conn || status !== 'connected' || !conn.sessionId) {
       showNotice('disconnected');
-      return;
+      return false;
     }
     const c = conn;
     if (apply && room) {
@@ -496,8 +496,10 @@
     }
     try {
       await request(c.server, `/api/rooms/${c.roomId}/commands`, { sessionId: c.sessionId, ...body });
+      return true;
     } catch (e) {
       if (conn === c) showNotice(e.code || 'network');
+      return false;
     }
   }
 
@@ -617,6 +619,19 @@
       const to = r[target.list || fromName];
       to.splice(Math.min(index, to.length), 0, item);
     });
+  }
+
+  // Shuffling the main queue needs the host or the host's permission, as moving does.
+  async function shuffleQueue() {
+    if (!room || room.queue.length < 2) return;
+    if (!canControl()) {
+      showNotice('host_only');
+      return;
+    }
+    const c = conn;
+    if ((await command({ type: 'shuffle' })) && conn === c) {
+      showNotice('queue_shuffled');
+    }
   }
 
   const isHost = () => Boolean(room && conn && room.hostId === conn.memberId);
@@ -894,6 +909,9 @@
         break;
       case 'move':
         moveSong(message.itemId, message.index, message.list);
+        break;
+      case 'shuffle':
+        shuffleQueue();
         break;
       case 'toggle':
         toggle();

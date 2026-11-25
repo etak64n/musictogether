@@ -231,6 +231,61 @@ func TestCommandsReachEveryMember(t *testing.T) {
 	}
 }
 
+func TestShuffleReachesEveryMember(t *testing.T) {
+	srv, _ := newTestServer(t)
+	roomID := createRoom(t, srv, "client-neko")
+	neko := openStream(t, srv, roomID, "client-neko", "ねこ")
+	nekoSession := next(t, neko).data["sessionId"].(string)
+	next(t, neko)
+	inu := openStream(t, srv, roomID, "client-inu", "いぬ")
+	inuSession := next(t, inu).data["sessionId"].(string)
+	next(t, inu)
+	next(t, neko) // いぬ joined
+
+	resp, body := post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{
+		"sessionId": nekoSession,
+		"type":      "addTracks",
+		"tracks":    []*Track{testTrack("aaaaaaaaaaa"), testTrack("bbbbbbbbbbb"), testTrack("ccccccccccc")},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("addTracks: status %d, body %v", resp.StatusCode, body)
+	}
+	next(t, neko)
+	next(t, inu)
+
+	resp, body = post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{
+		"sessionId": nekoSession,
+		"type":      "shuffle",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("shuffle: status %d, body %v", resp.StatusCode, body)
+	}
+	for _, events := range []<-chan event{neko, inu} {
+		room := next(t, events)
+		queue, _ := room.data["queue"].([]any)
+		if len(queue) != 2 || queue[0].(map[string]any)["videoId"] != "ccccccccccc" || queue[1].(map[string]any)["videoId"] != "bbbbbbbbbbb" {
+			t.Errorf("queue = %v; want [c, b]", queue)
+		}
+	}
+
+	// Without participantControl, a participant cannot shuffle.
+	resp, body = post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{
+		"sessionId": nekoSession,
+		"type":      "participantControl",
+		"value":     false,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("participantControl: status %d, body %v", resp.StatusCode, body)
+	}
+	resp, body = post(t, srv.URL+"/api/rooms/"+roomID+"/commands", map[string]any{
+		"sessionId": inuSession,
+		"type":      "shuffle",
+	})
+	if resp.StatusCode != http.StatusForbidden || body["error"] != "host_only" {
+		t.Errorf("shuffle by participant: status %d, body %v; want 403 host_only", resp.StatusCode, body)
+	}
+}
+
 func TestAddTracksTellsHowManyWereAdded(t *testing.T) {
 	srv, _ := newTestServer(t)
 	roomID := createRoom(t, srv, "client-neko")

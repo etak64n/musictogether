@@ -295,6 +295,7 @@ function renderRoom() {
   renderQueue(queue);
   // A server older than the standby queue sends none.
   renderStandby(room && room.standby ? room.standby : []);
+  $('shuffle-queue').hidden = !canControl() || queue.length < 2;
   $('save-playlist').hidden = history.length === 0 && !(room && room.current) && queue.length === 0;
   // When another song has finished, the queue scrolls so that the last one that
   // played is at its top, with the song that plays and the songs that wait below
@@ -1404,6 +1405,7 @@ $('now').addEventListener('mouseenter', () => startMarquee($('now')));
 $('now').addEventListener('mouseleave', () => stopMarquee($('now')));
 $('toggle').addEventListener('click', () => post({ type: 'toggle' }));
 $('next').addEventListener('click', () => post({ type: 'next' }));
+$('shuffle-queue').addEventListener('click', () => post({ type: 'shuffle' }));
 
 // --- no tab, reload ---
 
