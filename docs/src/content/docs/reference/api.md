@@ -215,6 +215,7 @@ The commands:
 | `addTracks` | Everyone | Adds `tracks` to `list` in their order from `index`, as many as the list has room for. Without `index`, each song of `standby` takes a random place. In a room where nothing plays, the first song starts at once. One invalid track adds none of them (`bad_request`), and a full list adds none (`queue_full`). |
 | `remove` | The host, and the member who added the item | Removes the item from `queue` or `standby`. |
 | `move` | The host, and participants with the permission | Takes the item out of its list and puts it at `index` in `list`. 0 puts it first, and an index past the end puts it last. |
+| `shuffle` | The host, and participants with the permission | Randomly reorders the waiting songs in `queue` (when at least 2 songs are waiting), leaving `current`, `history`, and `standby` unchanged. |
 | `seek` | The host, and participants with the permission | Moves the timeline to `position`. A position past the end of the song is the end. |
 | `next` | The host, and participants with the permission | Skips `current`, when `itemId` is still `current`. The skipped song goes to the end of `history`. |
 | `ended` | Everyone | Moves on from `current` when `itemId` is still `current` and the timeline is within 5 seconds of its end, or at once when its `duration` is 0. The song goes to the end of `history`. |
