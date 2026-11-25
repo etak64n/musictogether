@@ -845,8 +845,35 @@ main {
    songs that wait. The lists in it do not scroll on their own. */
 .queue-scroll {
   position: relative;
-  overflow-x: hidden;
   overflow-y: auto;
+}
+
+#queue.shuffling {
+  position: relative;
+  overflow: hidden;
+}
+
+#queue.shuffling li {
+  opacity: 0.28;
+  transition: opacity 150ms ease;
+}
+
+#queue.shuffling::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(8, 127, 140, 0.14) 50%, transparent 80%);
+  pointer-events: none;
+  content: "";
+  animation: queue-shimmer 440ms ease-in-out infinite;
+}
+
+@keyframes queue-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .queue-scroll .list {
@@ -1020,31 +1047,32 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
 }
 
 #shuffle-queue.shuffling {
-  background: var(--accent-soft);
+  background: var(--panel-soft);
   color: var(--accent);
 }
 
 #shuffle-queue.shuffling .icon {
-  animation: shuffle-pop 320ms ease-out;
+  animation: shuffle-pulse 420ms ease-in-out;
 }
 
-@keyframes shuffle-pop {
+@keyframes shuffle-pulse {
   0% {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
+    opacity: 1;
   }
-  35% {
-    transform: scale(0.82) rotate(-18deg);
-  }
-  70% {
-    transform: scale(1.12) rotate(10deg);
+  50% {
+    transform: scale(0.84);
+    opacity: 0.55;
   }
   100% {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #shuffle-queue.shuffling .icon {
+  #shuffle-queue.shuffling .icon,
+  #queue.shuffling::after {
     animation: none;
   }
 }

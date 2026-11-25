@@ -415,9 +415,38 @@ function renderNow(room) {
 // The songs that wait, in Main or in Standby. Members remove the songs they
 // added; the host removes any song. Changing the order needs the same
 // permission as skipping. The rows stay as they are while a song is dragged.
-const SHUFFLE_MS = 560;
-const SHUFFLE_STAGGER = 35;
-const SHUFFLE_MAX_SHIFT = 180;
+const SHUFFLE_MIN_MS = 240;
+const SHUFFLE_TIMEOUT_MS = 2000;
+const REFRESH_ENTER_MS = 280;
+const REFRESH_STAGGER_MS = 45;
+const REFRESH_MAX_DELAY_MS = 225;
+
+let shuffleWait = null; // { until, timer, pending }
+
+function clearShuffleWait() {
+  if (!shuffleWait) return;
+  clearTimeout(shuffleWait.timer);
+  shuffleWait = null;
+  $('queue').classList.remove('shuffling');
+}
+
+function startShuffleFeedback() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const button = $('shuffle-queue');
+  button.classList.remove('shuffling');
+  void button.offsetWidth;
+  button.classList.add('shuffling');
+  clearShuffleWait();
+  const list = $('queue');
+  list.classList.remove('shuffling');
+  void list.offsetWidth;
+  list.classList.add('shuffling');
+  shuffleWait = {
+    until: Date.now() + SHUFFLE_MIN_MS,
+    pending: null,
+    timer: setTimeout(clearShuffleWait, SHUFFLE_TIMEOUT_MS),
+  };
+}
 
 function renderWaiting(name, items, { animate = false } = {}) {
   if (drag) return false;
@@ -425,9 +454,30 @@ function renderWaiting(name, items, { animate = false } = {}) {
   const movable = canControl();
   const key = JSON.stringify([movable, items.map((item) => [item.id, removable(item)])]);
   if (key === rendered[name]) return false;
-  rendered[name] = key;
   const list = $(name);
-  const prevTops = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches ? measureOrder(list, items) : null;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reordered = animate && !reduced && isReordered(list, items);
+
+  // Keep the shimmer visible briefly before revealing the shuffled order so
+  // even a fast local server feels like a clear refresh.
+  if (name === 'queue' && shuffleWait && reordered) {
+    const remaining = shuffleWait.until - Date.now();
+    if (remaining > 0) {
+      shuffleWait.pending = items;
+      clearTimeout(shuffleWait.timer);
+      shuffleWait.timer = setTimeout(() => {
+        const next = shuffleWait && shuffleWait.pending;
+        clearShuffleWait();
+        if (next && view && view.room) renderQueue(view.room.queue, { animate: true });
+      }, remaining);
+      return false;
+    }
+    clearShuffleWait();
+  } else if (name === 'queue' && shuffleWait && !animate) {
+    clearShuffleWait();
+  }
+
+  rendered[name] = key;
   list.replaceChildren(...items.map((item) => {
     let action = emptyAction();
     if (removable(item)) {
@@ -440,88 +490,35 @@ function renderWaiting(name, items, { animate = false } = {}) {
     li.classList.toggle('movable', movable);
     return li;
   }));
-  if (prevTops) animateReorder(list, prevTops);
+  if (reordered) animateQueueRefresh(list);
   return true;
 }
 
-// Records each row's vertical position before a list is redrawn, only when the
-// shared songs actually changed their relative order (such as on shuffle).
-function measureOrder(list, items) {
+// Reports whether the shared songs actually changed their relative order.
+function isReordered(list, items) {
   const prevRows = [...list.children];
-  if (prevRows.length < 2 || items.length < 2) return null;
+  if (prevRows.length < 2 || items.length < 2) return false;
   const prevOrder = prevRows.map((li) => li.dataset.itemId);
   const nextOrder = items.map((item) => item.id);
   const nextSet = new Set(nextOrder);
   const prevSet = new Set(prevOrder);
   const prevCommon = prevOrder.filter((id) => nextSet.has(id));
   const nextCommon = nextOrder.filter((id) => prevSet.has(id));
-  if (prevCommon.length < 2 || !prevCommon.some((id, i) => id !== nextCommon[i])) return null;
-  const tops = new Map();
-  for (const li of prevRows) tops.set(li.dataset.itemId, li.getBoundingClientRect().top);
-  return tops;
+  return prevCommon.length >= 2 && prevCommon.some((id, i) => id !== nextCommon[i]);
 }
 
-// Each reordered row arcs smoothly from its previous place into its new place
-// with a staggered card-shuffle cross and accent highlight, so a shuffle is
-// unmistakable at a glance.
-function animateReorder(list, prevTops) {
+// Reveals the refreshed queue order with a clean top-to-bottom fade-in.
+function animateQueueRefresh(list) {
   [...list.children].forEach((li, index) => {
-    const oldTop = prevTops.get(li.dataset.itemId);
-    if (oldTop === undefined) return;
-    const raw = oldTop - li.getBoundingClientRect().top;
-    const delay = Math.min(index * SHUFFLE_STAGGER, 175);
-    if (Math.abs(raw) < 1) {
-      li.animate(
-        [
-          { transform: 'none', backgroundColor: 'rgba(8, 127, 140, 0.10)', boxShadow: 'inset 3px 0 0 rgba(8, 127, 140, 0.6)' },
-          { transform: 'translate3d(-5px, 0, 0)', backgroundColor: 'rgba(8, 127, 140, 0.14)', boxShadow: 'inset 3px 0 0 #087f8c', offset: 0.4 },
-          { transform: 'none', backgroundColor: 'transparent', boxShadow: 'none' },
-        ],
-        { duration: SHUFFLE_MS * 0.75, delay, easing: 'ease-out', fill: 'backwards' }
-      );
-      return;
-    }
-    const shift = Math.max(-SHUFFLE_MAX_SHIFT, Math.min(SHUFFLE_MAX_SHIFT, raw));
-    const side = raw > 0 ? 12 : -12;
-    const midY = shift * 0.45;
-    const z = raw > 0 ? 2 : 1;
     li.animate(
       [
-        {
-          position: 'relative',
-          zIndex: z,
-          transform: `translate3d(0, ${shift}px, 0) scale(1)`,
-          backgroundColor: 'rgba(8, 127, 140, 0.10)',
-          boxShadow: 'inset 3px 0 0 rgba(8, 127, 140, 0.6)',
-        },
-        {
-          position: 'relative',
-          zIndex: z,
-          transform: `translate3d(${side}px, ${midY}px, 0) scale(0.985)`,
-          backgroundColor: '#ffffff',
-          boxShadow: '0 4px 12px rgba(8, 127, 140, 0.20), inset 3px 0 0 #087f8c',
-          offset: 0.45,
-        },
-        {
-          position: 'relative',
-          zIndex: z,
-          transform: 'translate3d(0, 0, 0) scale(1)',
-          backgroundColor: 'rgba(8, 127, 140, 0.14)',
-          boxShadow: 'inset 3px 0 0 #087f8c',
-          offset: 0.78,
-        },
-        {
-          position: 'relative',
-          zIndex: 0,
-          transform: 'none',
-          backgroundColor: 'transparent',
-          boxShadow: 'none',
-        },
+        { opacity: 0, transform: 'translateY(6px)' },
+        { opacity: 1, transform: 'none' },
       ],
       {
-        duration: SHUFFLE_MS,
-        delay,
-        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        duration: REFRESH_ENTER_MS,
+        delay: Math.min(index * REFRESH_STAGGER_MS, REFRESH_MAX_DELAY_MS),
+        easing: 'ease-out',
         fill: 'backwards',
       }
     );
@@ -1498,12 +1495,7 @@ $('now').addEventListener('mouseleave', () => stopMarquee($('now')));
 $('toggle').addEventListener('click', () => post({ type: 'toggle' }));
 $('next').addEventListener('click', () => post({ type: 'next' }));
 $('shuffle-queue').addEventListener('click', () => {
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const button = $('shuffle-queue');
-    button.classList.remove('shuffling');
-    void button.offsetWidth;
-    button.classList.add('shuffling');
-  }
+  startShuffleFeedback();
   post({ type: 'shuffle' });
 });
 $('shuffle-queue').addEventListener('animationend', () => {
