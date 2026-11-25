@@ -292,7 +292,7 @@ function renderRoom() {
   const history = room && room.history ? room.history : [];
   const playedChanged = renderPlayed(history);
   renderCurrent(room ? room.current : null);
-  renderQueue(queue);
+  renderQueue(queue, { animate: true });
   // A server older than the standby queue sends none.
   renderStandby(room && room.standby ? room.standby : []);
   $('shuffle-queue').hidden = !canControl() || queue.length < 2;
@@ -415,14 +415,19 @@ function renderNow(room) {
 // The songs that wait, in Main or in Standby. Members remove the songs they
 // added; the host removes any song. Changing the order needs the same
 // permission as skipping. The rows stay as they are while a song is dragged.
-function renderWaiting(name, items) {
+const SHUFFLE_MS = 380;
+const SHUFFLE_MAX_SHIFT = 160;
+
+function renderWaiting(name, items, { animate = false } = {}) {
   if (drag) return false;
   const removable = (item) => isHost() || item.addedById === view.memberId;
   const movable = canControl();
   const key = JSON.stringify([movable, items.map((item) => [item.id, removable(item)])]);
   if (key === rendered[name]) return false;
   rendered[name] = key;
-  $(name).replaceChildren(...items.map((item) => {
+  const list = $(name);
+  const prevTops = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches ? measureOrder(list, items) : null;
+  list.replaceChildren(...items.map((item) => {
     let action = emptyAction();
     if (removable(item)) {
       action = iconButton('icon-remove', t('remove'));
@@ -434,11 +439,50 @@ function renderWaiting(name, items) {
     li.classList.toggle('movable', movable);
     return li;
   }));
+  if (prevTops) animateReorder(list, prevTops);
   return true;
 }
 
-function renderQueue(queue) {
-  renderWaiting('queue', queue);
+// Records each row's vertical position before a list is redrawn, only when the
+// shared songs actually changed their relative order (such as on shuffle).
+function measureOrder(list, items) {
+  const prevRows = [...list.children];
+  if (prevRows.length < 2 || items.length < 2) return null;
+  const prevOrder = prevRows.map((li) => li.dataset.itemId);
+  const nextOrder = items.map((item) => item.id);
+  const nextSet = new Set(nextOrder);
+  const prevSet = new Set(prevOrder);
+  const prevCommon = prevOrder.filter((id) => nextSet.has(id));
+  const nextCommon = nextOrder.filter((id) => prevSet.has(id));
+  if (prevCommon.length < 2 || !prevCommon.some((id, i) => id !== nextCommon[i])) return null;
+  const tops = new Map();
+  for (const li of prevRows) tops.set(li.dataset.itemId, li.getBoundingClientRect().top);
+  return tops;
+}
+
+// Each reordered row glides from its previous place into its new place with a
+// brief accent flash, so a shuffle is clear at a glance.
+function animateReorder(list, prevTops) {
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-soft').trim() || '#eef9fa';
+  for (const li of list.children) {
+    const oldTop = prevTops.get(li.dataset.itemId);
+    if (oldTop === undefined) continue;
+    const raw = oldTop - li.getBoundingClientRect().top;
+    if (Math.abs(raw) < 1) continue;
+    const shift = Math.max(-SHUFFLE_MAX_SHIFT, Math.min(SHUFFLE_MAX_SHIFT, raw));
+    li.animate(
+      [
+        { transform: `translateY(${shift}px)`, backgroundColor: accent },
+        { transform: 'none', backgroundColor: accent, offset: 0.55 },
+        { transform: 'none', backgroundColor: 'transparent' },
+      ],
+      { duration: SHUFFLE_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+    );
+  }
+}
+
+function renderQueue(queue, options) {
+  renderWaiting('queue', queue, options);
 }
 
 // Standby, the songs that play once Main is empty, sits folded below Main with
@@ -1405,7 +1449,18 @@ $('now').addEventListener('mouseenter', () => startMarquee($('now')));
 $('now').addEventListener('mouseleave', () => stopMarquee($('now')));
 $('toggle').addEventListener('click', () => post({ type: 'toggle' }));
 $('next').addEventListener('click', () => post({ type: 'next' }));
-$('shuffle-queue').addEventListener('click', () => post({ type: 'shuffle' }));
+$('shuffle-queue').addEventListener('click', () => {
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const button = $('shuffle-queue');
+    button.classList.remove('shuffling');
+    void button.offsetWidth;
+    button.classList.add('shuffling');
+  }
+  post({ type: 'shuffle' });
+});
+$('shuffle-queue').addEventListener('animationend', () => {
+  $('shuffle-queue').classList.remove('shuffling');
+});
 
 // --- no tab, reload ---
 

@@ -1004,6 +1004,36 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   height: 15px;
 }
 
+#shuffle-queue.shuffling {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+#shuffle-queue.shuffling .icon {
+  animation: shuffle-pop 320ms ease-out;
+}
+
+@keyframes shuffle-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(0.82) rotate(-18deg);
+  }
+  70% {
+    transform: scale(1.12) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #shuffle-queue.shuffling .icon {
+    animation: none;
+  }
+}
+
 /* Standby: below Main, a heading with the number of its songs, which opens
    and folds the songs below it. */
 .standby-head {
