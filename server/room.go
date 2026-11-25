@@ -110,7 +110,7 @@ type Command struct {
 func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 	isHost := by.ID == s.HostID
 	switch c.Type {
-	case "seek", "next", "move":
+	case "seek", "next", "move", "shuffle":
 		if !isHost && !s.ParticipantControl {
 			return false, errHostOnly
 		}
@@ -171,6 +171,16 @@ func (s *State) Apply(c Command, by member, now int64) (bool, error) {
 			*from = slices.Delete(*from, i, i+1)
 			*to = slices.Insert(*to, min(*c.Index, len(*to)), item)
 		}
+	case "shuffle":
+		// Shuffle only reorders the songs waiting in the main queue; the song
+		// that plays, the history, and the standby queue stay as they are.
+		if c.List != "" && c.List != "queue" {
+			return false, errBadRequest
+		}
+		if len(s.Queue) < 2 {
+			return false, nil
+		}
+		shuffleQueue(s.Queue)
 	case "seek":
 		pos, ok := s.clampPosition(c.Position)
 		if !ok {
@@ -261,6 +271,33 @@ func (s *State) AddTracks(tracks []Track, listName string, at *int, by member, n
 // the n+1 places of a list of n songs. Songs take random places, so that a
 // whole album or playlist that one member adds mixes with the others' songs.
 var standbyPlace = func(n int) int { return rand.IntN(n + 1) }
+
+// shuffleQueue puts a list of at least two songs in a random order, different
+// from the order it had when possible.
+var shuffleQueue = func(items []Item) {
+	if len(items) < 2 {
+		return
+	}
+	before := make([]string, len(items))
+	for i, it := range items {
+		before[i] = it.ID
+	}
+	unchanged := func() bool {
+		for i, it := range items {
+			if it.ID != before[i] {
+				return false
+			}
+		}
+		return true
+	}
+	for range 16 {
+		rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+		if !unchanged() {
+			return
+		}
+	}
+	items[0], items[1] = items[1], items[0]
+}
 
 // addItem puts a song at the place that at names, as when a member drops it
 // there, or else at the end of the queue, or at a random place in the standby

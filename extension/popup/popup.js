@@ -292,9 +292,10 @@ function renderRoom() {
   const history = room && room.history ? room.history : [];
   const playedChanged = renderPlayed(history);
   renderCurrent(room ? room.current : null);
-  renderQueue(queue);
+  renderQueue(queue, { animate: true });
   // A server older than the standby queue sends none.
   renderStandby(room && room.standby ? room.standby : []);
+  $('shuffle-queue').hidden = !canControl() || queue.length < 2;
   $('save-playlist').hidden = history.length === 0 && !(room && room.current) && queue.length === 0;
   // When another song has finished, the queue scrolls so that the last one that
   // played is at its top, with the song that plays and the songs that wait below
@@ -414,14 +415,70 @@ function renderNow(room) {
 // The songs that wait, in Main or in Standby. Members remove the songs they
 // added; the host removes any song. Changing the order needs the same
 // permission as skipping. The rows stay as they are while a song is dragged.
-function renderWaiting(name, items) {
+const SHUFFLE_MIN_MS = 240;
+const SHUFFLE_TIMEOUT_MS = 2000;
+const REFRESH_ENTER_MS = 280;
+const REFRESH_STAGGER_MS = 45;
+const REFRESH_MAX_DELAY_MS = 225;
+
+let shuffleWait = null; // { until, timer, pending }
+
+function clearShuffleWait() {
+  if (!shuffleWait) return;
+  clearTimeout(shuffleWait.timer);
+  shuffleWait = null;
+  $('queue').classList.remove('shuffling');
+}
+
+function startShuffleFeedback() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const button = $('shuffle-queue');
+  button.classList.remove('shuffling');
+  void button.offsetWidth;
+  button.classList.add('shuffling');
+  clearShuffleWait();
+  const list = $('queue');
+  list.classList.remove('shuffling');
+  void list.offsetWidth;
+  list.classList.add('shuffling');
+  shuffleWait = {
+    until: Date.now() + SHUFFLE_MIN_MS,
+    pending: null,
+    timer: setTimeout(clearShuffleWait, SHUFFLE_TIMEOUT_MS),
+  };
+}
+
+function renderWaiting(name, items, { animate = false } = {}) {
   if (drag) return false;
   const removable = (item) => isHost() || item.addedById === view.memberId;
   const movable = canControl();
   const key = JSON.stringify([movable, items.map((item) => [item.id, removable(item)])]);
   if (key === rendered[name]) return false;
+  const list = $(name);
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reordered = animate && !reduced && isReordered(list, items);
+
+  // Keep the shimmer visible briefly before revealing the shuffled order so
+  // even a fast local server feels like a clear refresh.
+  if (name === 'queue' && shuffleWait && reordered) {
+    const remaining = shuffleWait.until - Date.now();
+    if (remaining > 0) {
+      shuffleWait.pending = items;
+      clearTimeout(shuffleWait.timer);
+      shuffleWait.timer = setTimeout(() => {
+        const next = shuffleWait && shuffleWait.pending;
+        clearShuffleWait();
+        if (next && view && view.room) renderQueue(view.room.queue, { animate: true });
+      }, remaining);
+      return false;
+    }
+    clearShuffleWait();
+  } else if (name === 'queue' && shuffleWait && !animate) {
+    clearShuffleWait();
+  }
+
   rendered[name] = key;
-  $(name).replaceChildren(...items.map((item) => {
+  list.replaceChildren(...items.map((item) => {
     let action = emptyAction();
     if (removable(item)) {
       action = iconButton('icon-remove', t('remove'));
@@ -433,11 +490,44 @@ function renderWaiting(name, items) {
     li.classList.toggle('movable', movable);
     return li;
   }));
+  if (reordered) animateQueueRefresh(list);
   return true;
 }
 
-function renderQueue(queue) {
-  renderWaiting('queue', queue);
+// Reports whether the shared songs actually changed their relative order.
+function isReordered(list, items) {
+  const prevRows = [...list.children];
+  if (prevRows.length < 2 || items.length < 2) return false;
+  const prevOrder = prevRows.map((li) => li.dataset.itemId);
+  const nextOrder = items.map((item) => item.id);
+  const nextSet = new Set(nextOrder);
+  const prevSet = new Set(prevOrder);
+  const prevCommon = prevOrder.filter((id) => nextSet.has(id));
+  const nextCommon = nextOrder.filter((id) => prevSet.has(id));
+  return prevCommon.length >= 2 && prevCommon.some((id, i) => id !== nextCommon[i]);
+}
+
+// Reveals the refreshed queue order with a clean top-to-bottom fade-in.
+function animateQueueRefresh(list) {
+  [...list.children].forEach((li, index) => {
+    li.animate(
+      [
+        { opacity: 0, transform: 'translateY(6px)' },
+        { opacity: 1, transform: 'none' },
+      ],
+      {
+        duration: REFRESH_ENTER_MS,
+        delay: Math.min(index * REFRESH_STAGGER_MS, REFRESH_MAX_DELAY_MS),
+        easing: 'ease-out',
+        fill: 'backwards',
+      }
+    );
+  });
+}
+
+function renderQueue(queue, options) {
+  $('queue-count').textContent = queue.length === 1 ? t('standbyCountOne') : t('standbyCount', { count: queue.length });
+  renderWaiting('queue', queue, options);
 }
 
 // Standby, the songs that play once Main is empty, sits folded below Main with
@@ -1404,6 +1494,13 @@ $('now').addEventListener('mouseenter', () => startMarquee($('now')));
 $('now').addEventListener('mouseleave', () => stopMarquee($('now')));
 $('toggle').addEventListener('click', () => post({ type: 'toggle' }));
 $('next').addEventListener('click', () => post({ type: 'next' }));
+$('shuffle-queue').addEventListener('click', () => {
+  startShuffleFeedback();
+  post({ type: 'shuffle' });
+});
+$('shuffle-queue').addEventListener('animationend', () => {
+  $('shuffle-queue').classList.remove('shuffling');
+});
 
 // --- no tab, reload ---
 

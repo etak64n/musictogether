@@ -640,7 +640,7 @@ func TestUnknownCommandsAreRejected(t *testing.T) {
 	s := newState()
 	add(t, &s, "aaaaaaaaaaa", host, 0)
 	// Pausing and playing are each member's own, not changes to the room.
-	for _, typ := range []string{"shuffle", "pause", "play"} {
+	for _, typ := range []string{"repeat", "pause", "play"} {
 		if _, err := s.Apply(Command{Type: typ, Position: pos(1)}, host, 1000); !errors.Is(err, errBadRequest) {
 			t.Errorf("%s: err = %v; want bad_request", typ, err)
 		}
@@ -699,5 +699,123 @@ func TestHistoryKeepsTheLatestSongs(t *testing.T) {
 	}
 	if first, last := s.History[0].VideoID, s.History[len(s.History)-1].VideoID; first != ids[10] || last != ids[len(ids)-1] {
 		t.Errorf("History runs from %s to %s; want %s to %s", first, last, ids[10], ids[len(ids)-1])
+	}
+}
+
+func TestShuffleReordersOnlyTheQueue(t *testing.T) {
+	placeStandbyLast(t)
+	s := newState()
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	add(t, &s, "bbbbbbbbbbb", host, 1000)
+	add(t, &s, "ccccccccccc", guest, 1000)
+	add(t, &s, "ddddddddddd", host, 1000)
+	add(t, &s, "eeeeeeeeeee", guest, 1000)
+	addTo(t, &s, "standby", "xxxxxxxxxxx", guest, 1000)
+	addTo(t, &s, "standby", "yyyyyyyyyyy", host, 1000)
+	mustApply(t, &s, Command{Type: "next", ItemID: s.Current.ID}, host, 2000)
+
+	// Deterministic shuffle verifies exact reordering while leaving everything else untouched.
+	random := shuffleQueue
+	shuffleQueue = func(items []Item) { slices.Reverse(items) }
+	t.Cleanup(func() { shuffleQueue = random })
+
+	mustApply(t, &s, Command{Type: "shuffle"}, host, 3000)
+	if got := queued(&s); got != "edc" {
+		t.Fatalf("after deterministic shuffle, queue = %q; want \"edc\"", got)
+	}
+	if s.Current == nil || s.Current.VideoID != "bbbbbbbbbbb" {
+		t.Errorf("Current = %+v; want b unchanged", s.Current)
+	}
+	if len(s.History) != 1 || s.History[0].VideoID != "aaaaaaaaaaa" {
+		t.Errorf("History = %+v; want [a] unchanged", s.History)
+	}
+	if got := standby(&s); got != "xy" {
+		t.Errorf("Standby = %q; want \"xy\" unchanged", got)
+	}
+	if s.LastActiveAt != 3000 {
+		t.Errorf("LastActiveAt = %d; want 3000", s.LastActiveAt)
+	}
+
+	// Explicit list "queue" is accepted; standby and unknown lists are rejected.
+	mustApply(t, &s, Command{Type: "shuffle", List: "queue"}, host, 4000)
+	if got := queued(&s); got != "cde" {
+		t.Fatalf("after second deterministic shuffle, queue = %q; want \"cde\"", got)
+	}
+	for _, list := range []string{"standby", "later"} {
+		if _, err := s.Apply(Command{Type: "shuffle", List: list}, host, 4000); !errors.Is(err, errBadRequest) {
+			t.Errorf("shuffle with list %q: err = %v; want bad_request", list, err)
+		}
+	}
+
+	// With the real shuffler, a 2-song queue always changes order and a longer
+	// queue keeps every song once.
+	shuffleQueue = random
+	two := newState()
+	add(t, &two, "aaaaaaaaaaa", host, 1000)
+	add(t, &two, "bbbbbbbbbbb", host, 1000)
+	add(t, &two, "ccccccccccc", host, 1000)
+	mustApply(t, &two, Command{Type: "shuffle"}, host, 2000)
+	if got := queued(&two); got != "cb" {
+		t.Errorf("shuffling two songs gave %q; want \"cb\"", got)
+	}
+
+	many := newState()
+	add(t, &many, "aaaaaaaaaaa", host, 1000)
+	want := make([]string, 0, 20)
+	for i := range 20 {
+		id := fmt.Sprintf("song%07d", i)
+		want = append(want, id)
+		add(t, &many, id, host, 1000)
+	}
+	before := make([]string, len(many.Queue))
+	for i, it := range many.Queue {
+		before[i] = it.VideoID
+	}
+	mustApply(t, &many, Command{Type: "shuffle"}, host, 2000)
+	after := make([]string, len(many.Queue))
+	for i, it := range many.Queue {
+		after[i] = it.VideoID
+	}
+	if slices.Equal(before, after) {
+		t.Errorf("shuffling 20 songs left the order unchanged")
+	}
+	slices.Sort(after)
+	if !slices.Equal(after, want) {
+		t.Errorf("queue holds %v; want each of %v once", after, want)
+	}
+}
+
+func TestShuffleNeedsAtLeastTwoSongs(t *testing.T) {
+	s := newState()
+	if changed, err := s.Apply(Command{Type: "shuffle"}, host, 1000); changed || err != nil {
+		t.Errorf("shuffle on empty room = %v, %v; want no change", changed, err)
+	}
+	add(t, &s, "aaaaaaaaaaa", host, 1000)
+	add(t, &s, "bbbbbbbbbbb", host, 1000)
+	version := s.Version
+	if changed, err := s.Apply(Command{Type: "shuffle"}, host, 2000); changed || err != nil {
+		t.Errorf("shuffle on 1-song queue = %v, %v; want no change", changed, err)
+	}
+	if s.Version != version {
+		t.Errorf("Version = %d; want %d unchanged", s.Version, version)
+	}
+}
+
+func TestParticipantsNeedTheHostsPermissionToShuffle(t *testing.T) {
+	s := newState()
+	for _, id := range []string{"aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"} {
+		add(t, &s, id, guest, 0)
+	}
+	if _, err := s.Apply(Command{Type: "shuffle"}, guest, 1000); !errors.Is(err, errHostOnly) {
+		t.Errorf("shuffle by a participant without permission: err = %v; want host_only", err)
+	}
+	mustApply(t, &s, Command{Type: "participantControl", Value: flag(true)}, host, 1000)
+	mustApply(t, &s, Command{Type: "shuffle"}, guest, 2000)
+	if got := queued(&s); got != "cb" {
+		t.Errorf("queue = %q; want \"cb\"", got)
+	}
+	mustApply(t, &s, Command{Type: "participantControl", Value: flag(false)}, host, 3000)
+	if _, err := s.Apply(Command{Type: "shuffle"}, guest, 4000); !errors.Is(err, errHostOnly) {
+		t.Errorf("shuffle after permission was revoked: err = %v; want host_only", err)
 	}
 }
