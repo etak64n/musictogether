@@ -415,8 +415,9 @@ function renderNow(room) {
 // The songs that wait, in Main or in Standby. Members remove the songs they
 // added; the host removes any song. Changing the order needs the same
 // permission as skipping. The rows stay as they are while a song is dragged.
-const SHUFFLE_MS = 380;
-const SHUFFLE_MAX_SHIFT = 160;
+const SHUFFLE_MS = 560;
+const SHUFFLE_STAGGER = 35;
+const SHUFFLE_MAX_SHIFT = 180;
 
 function renderWaiting(name, items, { animate = false } = {}) {
   if (drag) return false;
@@ -460,28 +461,75 @@ function measureOrder(list, items) {
   return tops;
 }
 
-// Each reordered row glides from its previous place into its new place with a
-// brief accent flash, so a shuffle is clear at a glance.
+// Each reordered row arcs smoothly from its previous place into its new place
+// with a staggered card-shuffle cross and accent highlight, so a shuffle is
+// unmistakable at a glance.
 function animateReorder(list, prevTops) {
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-soft').trim() || '#eef9fa';
-  for (const li of list.children) {
+  [...list.children].forEach((li, index) => {
     const oldTop = prevTops.get(li.dataset.itemId);
-    if (oldTop === undefined) continue;
+    if (oldTop === undefined) return;
     const raw = oldTop - li.getBoundingClientRect().top;
-    if (Math.abs(raw) < 1) continue;
+    const delay = Math.min(index * SHUFFLE_STAGGER, 175);
+    if (Math.abs(raw) < 1) {
+      li.animate(
+        [
+          { transform: 'none', backgroundColor: 'rgba(8, 127, 140, 0.10)', boxShadow: 'inset 3px 0 0 rgba(8, 127, 140, 0.6)' },
+          { transform: 'translate3d(-5px, 0, 0)', backgroundColor: 'rgba(8, 127, 140, 0.14)', boxShadow: 'inset 3px 0 0 #087f8c', offset: 0.4 },
+          { transform: 'none', backgroundColor: 'transparent', boxShadow: 'none' },
+        ],
+        { duration: SHUFFLE_MS * 0.75, delay, easing: 'ease-out', fill: 'backwards' }
+      );
+      return;
+    }
     const shift = Math.max(-SHUFFLE_MAX_SHIFT, Math.min(SHUFFLE_MAX_SHIFT, raw));
+    const side = raw > 0 ? 12 : -12;
+    const midY = shift * 0.45;
+    const z = raw > 0 ? 2 : 1;
     li.animate(
       [
-        { transform: `translateY(${shift}px)`, backgroundColor: accent },
-        { transform: 'none', backgroundColor: accent, offset: 0.55 },
-        { transform: 'none', backgroundColor: 'transparent' },
+        {
+          position: 'relative',
+          zIndex: z,
+          transform: `translate3d(0, ${shift}px, 0) scale(1)`,
+          backgroundColor: 'rgba(8, 127, 140, 0.10)',
+          boxShadow: 'inset 3px 0 0 rgba(8, 127, 140, 0.6)',
+        },
+        {
+          position: 'relative',
+          zIndex: z,
+          transform: `translate3d(${side}px, ${midY}px, 0) scale(0.985)`,
+          backgroundColor: '#ffffff',
+          boxShadow: '0 4px 12px rgba(8, 127, 140, 0.20), inset 3px 0 0 #087f8c',
+          offset: 0.45,
+        },
+        {
+          position: 'relative',
+          zIndex: z,
+          transform: 'translate3d(0, 0, 0) scale(1)',
+          backgroundColor: 'rgba(8, 127, 140, 0.14)',
+          boxShadow: 'inset 3px 0 0 #087f8c',
+          offset: 0.78,
+        },
+        {
+          position: 'relative',
+          zIndex: 0,
+          transform: 'none',
+          backgroundColor: 'transparent',
+          boxShadow: 'none',
+        },
       ],
-      { duration: SHUFFLE_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+      {
+        duration: SHUFFLE_MS,
+        delay,
+        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        fill: 'backwards',
+      }
     );
-  }
+  });
 }
 
 function renderQueue(queue, options) {
+  $('queue-count').textContent = queue.length === 1 ? t('standbyCountOne') : t('standbyCount', { count: queue.length });
   renderWaiting('queue', queue, options);
 }
 
