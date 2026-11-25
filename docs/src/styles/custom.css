@@ -11,3 +11,17 @@
   --sl-color-accent: #087f8c;
   --sl-color-accent-high: #04454c;
 }
+
+.demo-video {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  margin: 1.25rem 0;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.demo-video.compact {
+  max-width: 380px;
+}
