@@ -99,7 +99,7 @@
 
       <div id="now" class="panel now">
         <div class="now-row">
-          <div id="now-art" class="art large"></div>
+          <button id="now-art" class="art large" type="button" disabled></button>
           <div class="text">
             <p id="now-title" class="title"></p>
             <div class="sub-row">
@@ -250,5 +250,17 @@
   </main>
 
   <div id="toast" class="toast" role="status" hidden></div>
+
+  <div id="art-viewer" class="art-viewer" role="dialog" aria-modal="true" data-i18n-label="closeArtwork" hidden>
+    <div id="art-viewer-card" class="art-viewer-card">
+      <div id="art-viewer-frame" class="art-viewer-frame">
+        <img id="art-viewer-img" alt="" referrerpolicy="no-referrer">
+      </div>
+      <div class="art-viewer-meta">
+        <p id="art-viewer-title" class="title"></p>
+        <p id="art-viewer-sub" class="sub"></p>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

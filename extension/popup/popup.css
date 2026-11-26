@@ -681,10 +681,26 @@ main.view-transitioning {
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   overflow: hidden;
+  border: 0;
   border-radius: var(--radius);
   background: var(--panel-soft);
   color: var(--muted);
+}
+
+button.art:not(:disabled) {
+  cursor: zoom-in;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+button.art:not(:disabled):hover {
+  transform: scale(1.06);
+  box-shadow: 0 2px 8px rgba(25, 29, 27, 0.16);
+}
+
+button.art:disabled {
+  cursor: default;
 }
 
 .art.large {
@@ -1582,4 +1598,70 @@ html[lang="en"] .room-card {
 
 .toast-action:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Temporary enlarged artwork preview: click any jacket to inspect it, and
+   click anywhere or press Escape to dismiss. */
+.art-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(25, 29, 27, 0.56);
+  backdrop-filter: blur(4px);
+  cursor: zoom-out;
+}
+
+.art-viewer-card {
+  display: grid;
+  gap: 8px;
+  width: min(264px, 100%);
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(25, 29, 27, 0.3);
+}
+
+.art-viewer-frame {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.art-viewer-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.art-viewer-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.art-viewer-meta .title {
+  font-size: 13px;
+}
+
+.art-viewer-meta .sub {
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.art:not(:disabled) {
+    transition: none;
+  }
+
+  button.art:not(:disabled):hover {
+    transform: none;
+  }
 }
