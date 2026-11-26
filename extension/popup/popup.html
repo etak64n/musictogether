@@ -146,18 +146,23 @@
             </button>
           </div>
         </div>
-        <div id="queue-scroll" class="queue-scroll">
-          <div id="drop-line" class="drop-line" hidden></div>
-          <ul id="played" class="list played" data-i18n-label="playedSongs"></ul>
-          <ul id="current" class="list current" data-i18n-label="nowPlaying"></ul>
-          <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+        <div id="queue-body" class="queue-body">
+          <div id="queue-scroll" class="queue-scroll">
+            <div id="drop-line" class="drop-line" hidden></div>
+            <ul id="played" class="list played" data-i18n-label="playedSongs"></ul>
+            <ul id="current" class="list current" data-i18n-label="nowPlaying"></ul>
+            <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+          </div>
           <div id="standby-section" class="standby-section">
-            <button id="standby-head" class="standby-head" type="button" aria-expanded="false" aria-controls="standby">
+            <button id="standby-head" class="standby-head" type="button" aria-expanded="false" aria-controls="standby-scroll">
               <span class="standby-title" data-i18n="standbyTitle"></span>
               <span id="standby-count" class="standby-count"></span>
               <svg class="icon chevron"><use href="#icon-chevron"/></svg>
             </button>
-            <ul id="standby" class="list" data-i18n-label="standbyTitle" hidden></ul>
+            <div id="standby-scroll" class="standby-scroll" hidden>
+              <div id="standby-drop-line" class="drop-line" hidden></div>
+              <ul id="standby" class="list" data-i18n-label="standbyTitle"></ul>
+            </div>
           </div>
         </div>
       </div>

@@ -562,7 +562,7 @@ try {
 }
 
 function applyStandbyFold() {
-  $('standby').hidden = !standbyOpen;
+  $('standby-scroll').hidden = !standbyOpen;
   $('standby-head').setAttribute('aria-expanded', String(standbyOpen));
   const label = t(standbyOpen ? 'foldList' : 'expandList');
   $('standby-head').title = label;
@@ -593,66 +593,111 @@ const DRAG_EDGE = 24; // px from the list's top or bottom where the list scrolls
 const DRAG_SCROLL = 6; // px the list scrolls per frame there
 const SETTLE_MS = 150;
 
-let drag = null; // { li, pointerId, startY, y, active, rows, from, to, tops, heights, origin, frame }
+let drag = null; // { li, pointerId, startY, y, active, zoom, height, fromList, fromIndex, toList, toIndex, placeholder, frame }
 
-// The rows that a dragged song moves among: Main's songs, the heading of
-// Standby, and Standby's songs while it is open.
-function dragRows() {
-  const rows = [...$('queue').children, $('standby-head')];
-  if (!$('standby').hidden) rows.push(...$('standby').children);
-  return rows;
+function listScroller(name) {
+  return name === 'standby' ? $('standby-scroll') : $('queue-scroll');
+}
+
+function listSiblings(name) {
+  return [...$(name).children].filter((row) => row !== drag.li && row !== drag.placeholder);
 }
 
 function startDrag() {
-  const scroller = $('queue-scroll');
-  const rows = dragRows();
-  const top = scroller.getBoundingClientRect().top;
+  const zoom = Number(document.documentElement.style.zoom) || 1;
+  const rect = drag.li.getBoundingClientRect();
+  const fromList = drag.li.parentElement.id;
+  const siblings = [...drag.li.parentElement.children];
+  const fromIndex = siblings.indexOf(drag.li);
+  const placeholder = document.createElement('li');
+  placeholder.className = 'drag-placeholder';
+  placeholder.style.height = `${drag.li.offsetHeight}px`;
+  drag.li.before(placeholder);
   drag.active = true;
-  drag.rows = rows;
-  drag.from = rows.indexOf(drag.li);
-  drag.to = drag.from;
-  // Positions within the content, which scrolling does not change.
-  drag.tops = rows.map((row) => row.getBoundingClientRect().top - top + scroller.scrollTop);
-  drag.heights = rows.map((row) => row.offsetHeight);
-  drag.origin = drag.startY - top + scroller.scrollTop;
+  drag.zoom = zoom;
+  drag.height = drag.li.offsetHeight;
+  drag.rect = rect;
+  drag.fromList = fromList;
+  drag.fromIndex = fromIndex;
+  drag.toList = fromList;
+  drag.toIndex = fromIndex;
+  drag.placeholder = placeholder;
   stopMarquee(drag.li);
-  scroller.classList.add('sorting');
+  $('queue-body').classList.add('sorting');
   drag.li.classList.add('dragging');
+  drag.li.style.top = `${rect.top / zoom}px`;
+  drag.li.style.left = `${rect.left / zoom}px`;
+  drag.li.style.width = `${rect.width / zoom}px`;
   drag.frame = requestAnimationFrame(dragFrame);
 }
 
-// Near the top or bottom of the queue, the queue scrolls under the dragged row.
+// Near the top or bottom of either scrollable list, that list scrolls under the dragged row.
 function dragFrame() {
-  const scroller = $('queue-scroll');
-  const box = scroller.getBoundingClientRect();
-  if (drag.y < box.top + DRAG_EDGE) scroller.scrollTop -= DRAG_SCROLL;
-  else if (drag.y > box.bottom - DRAG_EDGE) scroller.scrollTop += DRAG_SCROLL;
+  for (const scroller of [$('queue-scroll'), $('standby-scroll')]) {
+    if (scroller.hidden) continue;
+    const box = scroller.getBoundingClientRect();
+    if (drag.y < box.top || drag.y > box.bottom) continue;
+    if (drag.y < box.top + DRAG_EDGE) scroller.scrollTop -= DRAG_SCROLL;
+    else if (drag.y > box.bottom - DRAG_EDGE) scroller.scrollTop += DRAG_SCROLL;
+  }
   layoutDrag();
   drag.frame = requestAnimationFrame(dragFrame);
 }
 
+// Returns the target insertion index among a list's siblings based on unshifted layout positions.
+function dragIndexIn(name, y) {
+  const scroller = listScroller(name);
+  const scrollerTop = scroller.getBoundingClientRect().top;
+  const rows = listSiblings(name);
+  let index = 0;
+  for (const row of rows) {
+    const mid = scrollerTop + (row.offsetTop - scroller.scrollTop + row.offsetHeight / 2) * drag.zoom;
+    if (y > mid) index += 1;
+  }
+  return index;
+}
+
 function layoutDrag() {
-  const scroller = $('queue-scroll');
-  const { rows, from, tops, heights } = drag;
-  const last = rows.length - 1;
-  const y = drag.y - scroller.getBoundingClientRect().top + scroller.scrollTop;
-  // The row stays within the rows, so that it cannot make the list scroll further.
-  const shift = Math.min(Math.max(y - drag.origin, tops[0] - tops[from]), tops[last] + heights[last] - tops[from] - heights[from]);
-  // A row gives way once the dragged row's edge passes its middle, so the
-  // first and last places can be reached with the row held inside the list.
-  const top = tops[from] + shift;
-  const bottom = top + heights[from];
-  let to = from;
-  while (to > 0 && top < tops[to - 1] + heights[to - 1] / 2) to -= 1;
-  while (to < last && bottom > tops[to + 1] + heights[to + 1] / 2) to += 1;
-  drag.to = to;
-  rows.forEach((row, i) => {
-    let offset = 0;
-    if (i === from) offset = shift;
-    else if (from < i && i <= to) offset = -heights[from];
-    else if (to <= i && i < from) offset = heights[from];
-    row.style.transform = offset ? `translateY(${offset}px)` : '';
-  });
+  const bodyRect = $('queue-body').getBoundingClientRect();
+  const minShift = bodyRect.top - drag.rect.top;
+  const maxShift = bodyRect.bottom - drag.rect.bottom;
+  const shift = Math.min(Math.max(drag.y - drag.startY, minShift), maxShift);
+  drag.li.style.transform = `translateY(${shift / drag.zoom}px)`;
+
+  const headRect = $('standby-head').getBoundingClientRect();
+  const standbyOpenNow = !$('standby-scroll').hidden;
+  const pointerY = drag.rect.top + shift + drag.rect.height / 2;
+
+  if (pointerY >= headRect.top) {
+    drag.toList = 'standby';
+    if (!standbyOpenNow) {
+      drag.toIndex = -1;
+      $('standby-section').classList.add('drop-target');
+    } else {
+      $('standby-section').classList.remove('drop-target');
+      drag.toIndex = pointerY < headRect.bottom ? 0 : dragIndexIn('standby', pointerY);
+    }
+  } else {
+    $('standby-section').classList.remove('drop-target');
+    drag.toList = 'queue';
+    drag.toIndex = dragIndexIn('queue', pointerY);
+  }
+
+  for (const name of ['queue', 'standby']) {
+    const rows = listSiblings(name);
+    rows.forEach((row, i) => {
+      let offset = 0;
+      if (name === drag.fromList && name === drag.toList) {
+        if (drag.fromIndex <= i && i < drag.toIndex) offset = -drag.height;
+        else if (drag.toIndex <= i && i < drag.fromIndex) offset = drag.height;
+      } else if (name === drag.fromList) {
+        if (i >= drag.fromIndex) offset = -drag.height;
+      } else if (name === drag.toList && drag.toIndex >= 0) {
+        if (i >= drag.toIndex) offset = drag.height;
+      }
+      row.style.transform = offset ? `translateY(${offset}px)` : '';
+    });
+  }
 }
 
 // A dropped song takes its new place in the popup at once, and in the room
@@ -667,23 +712,19 @@ function finishDrag(drop) {
   cancelAnimationFrame(d.frame);
   const itemId = d.li.dataset.itemId;
   const droppedTop = d.li.getBoundingClientRect().top;
-  // The new order of the rows decides the list: the side of Standby's heading
-  // that the song lands on. The song lands before the rows below it in that
-  // list. They are found by ID, in case the lists changed during the drag:
-  // when the first of them has left, for example because it started playing,
-  // the next one counts.
-  const head = $('standby-head');
-  const order = d.rows.filter((row) => row !== d.li);
-  order.splice(d.to, 0, d.li);
-  const headAt = order.indexOf(head);
-  const list = order.indexOf(d.li) < headAt ? 'queue' : 'standby';
-  const rows = list === 'queue' ? order.slice(0, headAt) : order.slice(headAt + 1);
-  const below = rows.slice(rows.indexOf(d.li) + 1).map((row) => row.dataset.itemId);
-  $('queue-scroll').classList.remove('sorting');
+  const targetRows = [...$(d.toList).children].filter((row) => row !== d.li && row !== d.placeholder);
+  const below = d.toIndex < 0 ? [] : targetRows.slice(d.toIndex).map((row) => row.dataset.itemId);
+  d.placeholder.remove();
+  $('queue-body').classList.remove('sorting');
+  $('standby-section').classList.remove('drop-target');
   d.li.classList.remove('dragging');
-  for (const row of d.rows) row.style.transform = '';
+  d.li.style.top = '';
+  d.li.style.left = '';
+  d.li.style.width = '';
+  d.li.style.transform = '';
+  for (const row of [...$('queue').children, ...$('standby').children]) row.style.transform = '';
   if (!view || !view.room) return;
-  if (drop && d.to !== d.from) moveSong(itemId, below, list);
+  if (drop && (d.toList !== d.fromList || d.toIndex !== d.fromIndex)) moveSong(itemId, below, d.toList);
   renderLists();
   settle(itemId, droppedTop);
 }
@@ -721,20 +762,20 @@ function settle(itemId, fromTop) {
   li.animate([{ transform: `translateY(${offset}px)` }, { transform: 'none' }], { duration: SETTLE_MS, easing: 'ease-out' });
 }
 
-$('queue-scroll').addEventListener('pointerdown', (event) => {
+$('queue-body').addEventListener('pointerdown', (event) => {
   const li = event.target.closest('li.movable');
   if (!li || drag || event.button !== 0 || event.target.closest('button')) return;
   drag = { li, pointerId: event.pointerId, startY: event.clientY, y: event.clientY, active: false };
-  $('queue-scroll').setPointerCapture(event.pointerId);
+  $('queue-body').setPointerCapture(event.pointerId);
 });
 
-$('queue-scroll').addEventListener('pointermove', (event) => {
+$('queue-body').addEventListener('pointermove', (event) => {
   if (!drag || event.pointerId !== drag.pointerId) return;
   drag.y = event.clientY;
   if (!drag.active && Math.abs(drag.y - drag.startY) >= DRAG_THRESHOLD) startDrag();
 });
 
-$('queue-scroll').addEventListener('pointerup', (event) => {
+$('queue-body').addEventListener('pointerup', (event) => {
   if (!drag || event.pointerId !== drag.pointerId) return;
   drag.y = event.clientY;
   if (drag.active) layoutDrag();
@@ -742,7 +783,7 @@ $('queue-scroll').addEventListener('pointerup', (event) => {
 });
 
 for (const type of ['pointercancel', 'lostpointercapture']) {
-  $('queue-scroll').addEventListener(type, (event) => {
+  $('queue-body').addEventListener(type, (event) => {
     if (drag && event.pointerId === drag.pointerId) finishDrag(false);
   });
 }
@@ -1156,9 +1197,9 @@ document.addEventListener('drop', (event) => event.preventDefault());
 // end of Main.
 function dropPlace(event) {
   const target = event.target instanceof Element ? event.target : null;
-  if (!target || !target.closest('#queue-scroll')) return { list: 'queue' };
+  if (!target || !target.closest('#queue-body')) return { list: 'queue' };
   const y = event.clientY;
-  const open = !$('standby').hidden;
+  const open = !$('standby-scroll').hidden;
   const head = $('standby-head').getBoundingClientRect();
   const placeAmong = (rows) => {
     const index = rows.findIndex((row) => y < row.getBoundingClientRect().top + row.offsetHeight / 2);
@@ -1173,16 +1214,15 @@ function dropPlace(event) {
 
 // The line sits between the rows where the song will go.
 function showDropLine(place) {
-  const line = $('drop-line');
-  if (!place || place.index === undefined) {
-    line.hidden = true;
-    return;
-  }
+  $('drop-line').hidden = true;
+  $('standby-drop-line').hidden = true;
+  if (!place || place.index === undefined) return;
+  const line = place.list === 'standby' ? $('standby-drop-line') : $('drop-line');
   const rows = [...$(place.list).children];
   let top;
   if (place.index < rows.length) top = rows[place.index].offsetTop;
   else if (rows.length > 0) top = rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight;
-  else top = place.list === 'standby' ? $('standby-head').offsetTop + $('standby-head').offsetHeight : $('queue').offsetTop;
+  else top = place.list === 'standby' ? 0 : $('queue').offsetTop;
   line.style.top = `${top - 1}px`;
   line.hidden = false;
 }
@@ -1193,13 +1233,15 @@ function markDrop(place) {
   showDropLine(place);
 }
 
-// Near the top or bottom of the queue, the queue scrolls under the song.
+// Near the top or bottom of either scrollable list, that list scrolls under the song.
 function scrollForDrop(event) {
-  const scroller = $('queue-scroll');
-  const box = scroller.getBoundingClientRect();
-  if (event.clientX < box.left || event.clientX > box.right) return;
-  if (event.clientY < box.top + DRAG_EDGE && event.clientY >= box.top) scroller.scrollTop -= DRAG_SCROLL;
-  else if (event.clientY > box.bottom - DRAG_EDGE && event.clientY <= box.bottom) scroller.scrollTop += DRAG_SCROLL;
+  for (const scroller of [$('queue-scroll'), $('standby-scroll')]) {
+    if (scroller.hidden) continue;
+    const box = scroller.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right) continue;
+    if (event.clientY < box.top + DRAG_EDGE && event.clientY >= box.top) scroller.scrollTop -= DRAG_SCROLL;
+    else if (event.clientY > box.bottom - DRAG_EDGE && event.clientY <= box.bottom) scroller.scrollTop += DRAG_SCROLL;
+  }
 }
 
 $('room').addEventListener('dragenter', (event) => {
@@ -1289,7 +1331,7 @@ function topRow(scroller) {
   return [...scroller.querySelectorAll('li')].find((li) => li.getBoundingClientRect().bottom > edge + 1) || null;
 }
 
-function setupFold(button, panel, scroller, key) {
+function setupFold(button, panel, body, scroller, key) {
   let open = false;
   try {
     open = localStorage.getItem(key) === 'open';
@@ -1308,9 +1350,13 @@ function setupFold(button, panel, scroller, key) {
   // queue whose songs fit is folded.
   const fit = () => {
     const last = scroller.lastElementChild;
-    const content = last ? last.offsetTop + last.offsetHeight : 0;
-    const foldedHeight = parseFloat(getComputedStyle(scroller).getPropertyValue('--queue-folded')) || 0;
-    const fits = content <= foldedHeight + 1;
+    const mainContent = last ? last.offsetTop + last.offsetHeight : 0;
+    const foldedHeight = parseFloat(getComputedStyle(body).getPropertyValue('--queue-folded')) || 0;
+    const standbyHeadHeight = $('standby-head').offsetHeight;
+    const standbyContent = $('standby-scroll').hidden ? 0 : $('standby').offsetHeight;
+    const standbyNeeded = standbyHeadHeight + standbyContent;
+    const standbyMax = foldedHeight * 0.5;
+    const fits = mainContent + Math.min(standbyNeeded, standbyMax) <= foldedHeight + 1 && standbyNeeded <= standbyMax + 1;
     button.classList.toggle('unneeded', fits);
     button.disabled = fits;
     if (fits && open) {
@@ -1321,8 +1367,12 @@ function setupFold(button, panel, scroller, key) {
     apply();
   };
   const watcher = new ResizeObserver(fit);
+  watcher.observe(body);
   watcher.observe(scroller);
   for (const list of scroller.children) watcher.observe(list);
+  watcher.observe($('standby-section'));
+  watcher.observe($('standby-scroll'));
+  watcher.observe($('standby'));
 
   button.addEventListener('click', () => {
     if (!open) {
@@ -1351,7 +1401,7 @@ function setupFold(button, panel, scroller, key) {
   }
 }
 
-setupFold($('queue-fold'), $('queue-panel'), $('queue-scroll'), 'queueFold');
+setupFold($('queue-fold'), $('queue-panel'), $('queue-body'), $('queue-scroll'), 'queueFold');
 
 // --- settings ---
 
