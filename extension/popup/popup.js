@@ -1300,13 +1300,11 @@ function setupFold(button, panel, scroller, key) {
   const apply = () => {
     panel.classList.toggle('expanded', open);
     button.setAttribute('aria-expanded', String(open));
-    const label = t(open ? 'foldList' : 'expandList');
-    button.setAttribute('aria-label', label);
-    button.title = label;
+    button.title = button.disabled ? '' : t(open ? 'foldList' : 'expandList');
   };
   apply();
 
-  // The button shows only while the songs do not fit in the folded queue. A
+  // The chevron shows only while the songs do not fit in the folded queue. A
   // queue whose songs fit is folded.
   const fit = () => {
     const last = scroller.lastElementChild;
@@ -1314,13 +1312,13 @@ function setupFold(button, panel, scroller, key) {
     const foldedHeight = parseFloat(getComputedStyle(scroller).getPropertyValue('--queue-folded')) || 0;
     const fits = content <= foldedHeight + 1;
     button.classList.toggle('unneeded', fits);
-    button.tabIndex = fits ? -1 : 0;
+    button.disabled = fits;
     if (fits && open) {
       open = false;
       folded = null;
-      apply();
       remember();
     }
+    apply();
   };
   const watcher = new ResizeObserver(fit);
   watcher.observe(scroller);

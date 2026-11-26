@@ -743,14 +743,14 @@ main {
 /* Queue */
 
 .queue {
-  padding: 6px 4px 4px;
+  padding: 4px;
 }
 
-.section-title {
-  padding: 0 6px 4px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
+.section-heading {
+  flex: 1;
+  min-width: 0;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 /* Search */
@@ -975,19 +975,40 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   height: max(120px, calc(var(--available) - 177px));
 }
 
-/* The heading of the queue, with the button that saves the songs that played
-   as a playlist, and the one that expands and folds the queue. */
+/* The heading of the queue, which expands and folds the queue when clicked,
+   with the buttons that shuffle Main or save it as a playlist overlaid on the
+   right beside the chevron. */
 .section-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fold {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 0 2px 0 0;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 2px 0 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
 }
 
-.section-head .section-title {
-  padding-right: 0;
-  padding-bottom: 0;
+.fold:hover:not(:disabled) {
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.fold:disabled {
+  cursor: default;
 }
 
 .section-label {
@@ -995,27 +1016,49 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding-right: 50px;
+}
+
+.section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .section-count {
-  color: var(--muted);
-  font-size: 11px;
+  flex: none;
   font-weight: 700;
 }
 
-/* While the songs fit, the button is not needed; it keeps its place, so that
-   nothing below it moves when it comes. */
-.fold.unneeded {
+.fold-chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.fold:hover:not(:disabled) .fold-chevron {
+  color: var(--accent);
+}
+
+/* While the songs fit, the chevron is not needed; it keeps its place, so that
+   nothing shifts when it comes. */
+.fold.unneeded .fold-chevron {
   visibility: hidden;
 }
 
 .head-actions {
+  position: absolute;
+  top: 50%;
+  right: 26px;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 2px;
+  transform: translateY(-50%);
 }
 
-.fold,
 .head-icon {
   display: grid;
   flex: none;
@@ -1030,7 +1073,6 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   cursor: pointer;
 }
 
-.fold:hover,
 .head-icon:hover:not(:disabled) {
   background: var(--panel-soft);
   color: var(--accent);
@@ -1074,6 +1116,11 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   #shuffle-queue.shuffling .icon,
   #queue.shuffling::after {
     animation: none;
+  }
+
+  .fold .icon,
+  .standby-head .chevron {
+    transition: none;
   }
 }
 
@@ -1176,6 +1223,7 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   width: 14px;
   height: 14px;
   transform: rotate(90deg);
+  transition: transform 160ms ease;
 }
 
 .fold[aria-expanded="true"] .icon {
