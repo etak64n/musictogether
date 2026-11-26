@@ -141,7 +141,25 @@ h1 {
 }
 
 main {
+  position: relative;
   padding: 0 10px 10px;
+}
+
+main.view-transitioning {
+  overflow: hidden;
+}
+
+.view-entering {
+  position: relative;
+  z-index: 1;
+}
+
+.view-leaving {
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* A newer release on GitHub: a quiet line above everything else, which opens
@@ -448,11 +466,31 @@ main {
   font-weight: 900;
 }
 
-/* The gear stays lit while the settings are open. */
+/* The gear stays lit and turns smoothly while the settings are open. */
+.topbar #settings {
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.topbar #settings .icon {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .topbar #settings[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.topbar #settings[aria-pressed="true"] .icon {
+  transform: rotate(90deg);
+}
+
+#settings-view,
+#settings-view > .panel {
+  transform-origin: top right;
 }
 
 /* A choice of a few options, side by side in columns of the same width. The
@@ -531,6 +569,11 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .save.saved .icon {
     animation: none;
+  }
+
+  .topbar #settings,
+  .topbar #settings .icon {
+    transition: none;
   }
 }
 
@@ -743,14 +786,14 @@ main {
 /* Queue */
 
 .queue {
-  padding: 6px 4px 4px;
+  padding: 4px;
 }
 
-.section-title {
-  padding: 0 6px 4px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
+.section-heading {
+  flex: 1;
+  min-width: 0;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 /* Search */
@@ -827,12 +870,20 @@ main {
 }
 
 .sorting li.dragging {
-  position: relative;
-  z-index: 1;
+  position: fixed;
+  z-index: 10;
+  margin: 0;
   border-top-color: transparent;
+  border-radius: var(--radius);
   background: var(--panel);
   box-shadow: 0 4px 14px rgba(25, 29, 27, 0.16);
+  pointer-events: none;
   transition: none;
+}
+
+.drag-placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -841,10 +892,12 @@ main {
   }
 }
 
-/* The queue scrolls as one: the songs that played, in gray, and then the
-   songs that wait. The lists in it do not scroll on their own. */
+/* Main scrolls above Standby, while Standby stays pinned at the bottom of the
+   queue panel so its heading is always visible without scrolling. */
 .queue-scroll {
   position: relative;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -876,7 +929,8 @@ main {
   }
 }
 
-.queue-scroll .list {
+.queue-scroll .list,
+.standby-scroll .list {
   overflow: visible;
 }
 
@@ -944,8 +998,10 @@ html.panel {
   initial-value: 80px;
 }
 
-.queue-scroll {
+.queue-body {
   --queue-folded: max(80px, calc((var(--available) - 374px) * 0.6));
+  display: flex;
+  flex-direction: column;
   height: var(--queue-folded);
 }
 
@@ -960,7 +1016,7 @@ html:not(.panel) #room:has(#results:not([hidden])) .room-card {
   display: none;
 }
 
-html:not(.panel) #room:has(#results:not([hidden])) .queue-scroll {
+html:not(.panel) #room:has(#results:not([hidden])) .queue-body {
   --queue-folded: 80px;
 }
 
@@ -971,23 +1027,44 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
 /* Expanded, the queue reaches down to the bottom of the window, below the song
    that plays, and scrolls inside from there. The parts above and below it take
    177px. */
-#queue-panel.expanded .queue-scroll {
+#queue-panel.expanded .queue-body {
   height: max(120px, calc(var(--available) - 177px));
 }
 
-/* The heading of the queue, with the button that saves the songs that played
-   as a playlist, and the one that expands and folds the queue. */
+/* The heading of the queue, which expands and folds the queue when clicked,
+   with the buttons that shuffle Main or save it as a playlist overlaid on the
+   right beside the chevron. */
 .section-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fold {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 0 2px 0 0;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 2px 0 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
 }
 
-.section-head .section-title {
-  padding-right: 0;
-  padding-bottom: 0;
+.fold:hover:not(:disabled) {
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.fold:disabled {
+  cursor: default;
 }
 
 .section-label {
@@ -995,27 +1072,49 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding-right: 50px;
+}
+
+.section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .section-count {
-  color: var(--muted);
-  font-size: 11px;
+  flex: none;
   font-weight: 700;
 }
 
-/* While the songs fit, the button is not needed; it keeps its place, so that
-   nothing below it moves when it comes. */
-.fold.unneeded {
+.fold-chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.fold:hover:not(:disabled) .fold-chevron {
+  color: var(--accent);
+}
+
+/* While the songs fit, the chevron is not needed; it keeps its place, so that
+   nothing shifts when it comes. */
+.fold.unneeded .fold-chevron {
   visibility: hidden;
 }
 
 .head-actions {
+  position: absolute;
+  top: 50%;
+  right: 26px;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 2px;
+  transform: translateY(-50%);
 }
 
-.fold,
 .head-icon {
   display: grid;
   flex: none;
@@ -1030,7 +1129,6 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   cursor: pointer;
 }
 
-.fold:hover,
 .head-icon:hover:not(:disabled) {
   background: var(--panel-soft);
   color: var(--accent);
@@ -1075,20 +1173,41 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   #queue.shuffling::after {
     animation: none;
   }
+
+  .fold .icon,
+  .standby-head .chevron {
+    transition: none;
+  }
 }
 
-/* Standby: below Main, a heading with the number of its songs, which opens
-   and folds the songs below it. */
+/* Standby: pinned below Main, a heading with the number of its songs, which
+   opens and folds the songs below it without having to scroll Main first. */
+.standby-section {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 50%;
+}
+
+.standby-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .standby-head {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 28px;
-  margin-top: 2px;
+  min-height: 26px;
   padding: 0 6px;
   border: 0;
   border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
   background: var(--panel);
   color: var(--muted);
   font-size: 11px;
@@ -1176,6 +1295,7 @@ html:not(.panel) #room:has(#results:not([hidden])) #results {
   width: 14px;
   height: 14px;
   transform: rotate(90deg);
+  transition: transform 160ms ease;
 }
 
 .fold[aria-expanded="true"] .icon {

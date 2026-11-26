@@ -126,10 +126,17 @@
 
       <div id="queue-panel" class="panel queue">
         <div class="section-head">
-          <div class="section-label">
-            <h2 class="section-title" data-i18n="queueTitle"></h2>
-            <span id="queue-count" class="section-count"></span>
-          </div>
+          <h2 class="section-heading">
+            <button id="queue-fold" class="fold" type="button" aria-expanded="false" aria-controls="queue-scroll">
+              <span class="section-label">
+                <span class="section-title" data-i18n="queueTitle"></span>
+                <span id="queue-count" class="section-count"></span>
+              </span>
+              <span class="fold-chevron" aria-hidden="true">
+                <svg class="icon"><use href="#icon-chevron"/></svg>
+              </span>
+            </button>
+          </h2>
           <div class="head-actions">
             <button id="shuffle-queue" class="head-icon" type="button" data-i18n-label="shuffleQueue" data-i18n-title="shuffleQueue" hidden>
               <svg class="icon"><use href="#icon-shuffle"/></svg>
@@ -137,23 +144,25 @@
             <button id="save-playlist" class="head-icon" type="button" data-i18n-label="savePlaylist" data-i18n-title="savePlaylist" hidden>
               <svg class="icon"><use href="#icon-playlist"/></svg>
             </button>
-            <button id="queue-fold" class="fold" type="button" aria-expanded="false" aria-controls="queue-scroll">
-              <svg class="icon"><use href="#icon-chevron"/></svg>
-            </button>
           </div>
         </div>
-        <div id="queue-scroll" class="queue-scroll">
-          <div id="drop-line" class="drop-line" hidden></div>
-          <ul id="played" class="list played" data-i18n-label="playedSongs"></ul>
-          <ul id="current" class="list current" data-i18n-label="nowPlaying"></ul>
-          <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+        <div id="queue-body" class="queue-body">
+          <div id="queue-scroll" class="queue-scroll">
+            <div id="drop-line" class="drop-line" hidden></div>
+            <ul id="played" class="list played" data-i18n-label="playedSongs"></ul>
+            <ul id="current" class="list current" data-i18n-label="nowPlaying"></ul>
+            <ul id="queue" class="list" data-i18n-label="upNext"></ul>
+          </div>
           <div id="standby-section" class="standby-section">
-            <button id="standby-head" class="standby-head" type="button" aria-expanded="false" aria-controls="standby">
+            <button id="standby-head" class="standby-head" type="button" aria-expanded="false" aria-controls="standby-scroll">
               <span class="standby-title" data-i18n="standbyTitle"></span>
               <span id="standby-count" class="standby-count"></span>
               <svg class="icon chevron"><use href="#icon-chevron"/></svg>
             </button>
-            <ul id="standby" class="list" data-i18n-label="standbyTitle" hidden></ul>
+            <div id="standby-scroll" class="standby-scroll" hidden>
+              <div id="standby-drop-line" class="drop-line" hidden></div>
+              <ul id="standby" class="list" data-i18n-label="standbyTitle"></ul>
+            </div>
           </div>
         </div>
       </div>
