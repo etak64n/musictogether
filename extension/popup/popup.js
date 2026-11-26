@@ -427,7 +427,18 @@ function renderNow(room) {
   if (key === rendered.now) return;
   rendered.now = key;
   stopMarquee($('now'));
-  $('now-art').replaceChildren(...(item ? [artwork(item.thumbnail)] : []));
+  const nowArt = $('now-art');
+  nowArt.replaceChildren(...(item ? [artwork(item.thumbnail)] : []));
+  const canZoom = Boolean(item && item.thumbnail);
+  nowArt.disabled = !canZoom;
+  if (canZoom) {
+    const zoomLabel = t('enlargeArtwork');
+    nowArt.setAttribute('aria-label', zoomLabel);
+    nowArt.title = zoomLabel;
+  } else {
+    nowArt.removeAttribute('aria-label');
+    nowArt.removeAttribute('title');
+  }
   setLine($('now-title'), item ? item.title : '');
   setLine($('now-sub'), item ? item.artists : '');
   showAddedBy($('now-by'), item ? item.addedBy : '');
@@ -862,8 +873,15 @@ $('seek').addEventListener('change', () => {
 
 function songRow(track, subtitle, action, addedBy) {
   const li = document.createElement('li');
-  const art = document.createElement('div');
+  const art = document.createElement(track.thumbnail ? 'button' : 'div');
   art.className = 'art';
+  if (track.thumbnail) {
+    art.type = 'button';
+    const zoomLabel = t('enlargeArtwork');
+    art.setAttribute('aria-label', zoomLabel);
+    art.title = zoomLabel;
+    art.addEventListener('click', () => openArtViewer(track, art));
+  }
   art.append(artwork(track.thumbnail));
   const text = document.createElement('div');
   text.className = 'text';
@@ -974,6 +992,131 @@ function artwork(url) {
   }
   return icon('icon-logo');
 }
+
+// Upgrades YouTube Music's Google-hosted square thumbnails for crisp enlarged
+// display while keeping the original URL as an immediate cached fallback.
+function largeArtworkUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)(googleusercontent\.com|ggpht\.com)$/.test(parsed.hostname)) return url;
+    return url
+      .replace(/=w\d+-h\d+/i, '=w544-h544')
+      .replace(/=s\d+(?=-|$)/i, '=s544');
+  } catch {
+    return url;
+  }
+}
+
+let artViewerState = null; // { url, source, closing, animations }
+
+function cancelArtViewerAnimations() {
+  if (!artViewerState) return;
+  for (const anim of artViewerState.animations) anim.cancel();
+  artViewerState.animations = [];
+}
+
+function artViewerTransform(source) {
+  if (!source || !source.isConnected) return null;
+  const sr = source.getBoundingClientRect();
+  const fr = $('art-viewer-frame').getBoundingClientRect();
+  if (sr.width <= 0 || fr.width <= 0) return null;
+  const zoom = Number(document.documentElement.style.zoom) || 1;
+  const dx = (sr.left + sr.width / 2 - (fr.left + fr.width / 2)) / zoom;
+  const dy = (sr.top + sr.height / 2 - (fr.top + fr.height / 2)) / zoom;
+  const scale = Math.max(0.12, sr.width / fr.width);
+  return `translate(${dx}px, ${dy}px) scale(${scale})`;
+}
+
+function openArtViewer(track, source) {
+  if (!track || !track.thumbnail) return;
+  cancelArtViewerAnimations();
+  const viewer = $('art-viewer');
+  const card = $('art-viewer-card');
+  const img = $('art-viewer-img');
+  const url = track.thumbnail;
+  img.src = url;
+  img.alt = track.title || '';
+  $('art-viewer-title').textContent = track.title || '';
+  $('art-viewer-sub').textContent = track.artists || '';
+  $('art-viewer-sub').hidden = !track.artists;
+  viewer.hidden = false;
+
+  const state = { url, source, closing: false, animations: [] };
+  artViewerState = state;
+
+  const hiRes = largeArtworkUrl(url);
+  if (hiRes && hiRes !== url) {
+    const preload = new Image();
+    preload.referrerPolicy = 'no-referrer';
+    preload.onload = () => {
+      if (artViewerState === state && !state.closing) img.src = hiRes;
+    };
+    preload.src = hiRes;
+  }
+
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const from = artViewerTransform(source) || 'scale(0.9)';
+    state.animations = [
+      viewer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' }),
+      card.animate(
+        [
+          { opacity: 0.25, transform: from },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+      ),
+    ];
+  }
+}
+
+function closeArtViewer() {
+  const viewer = $('art-viewer');
+  if (viewer.hidden || !artViewerState || artViewerState.closing) return;
+  const state = artViewerState;
+  state.closing = true;
+  cancelArtViewerAnimations();
+
+  const done = () => {
+    if (artViewerState !== state) return;
+    artViewerState = null;
+    viewer.hidden = true;
+    if (state.source && state.source.isConnected && !state.source.disabled) state.source.focus({ preventScroll: true });
+  };
+
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    done();
+    return;
+  }
+  const card = $('art-viewer-card');
+  const to = artViewerTransform(state.source) || 'scale(0.92)';
+  state.animations = [
+    viewer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease', fill: 'forwards' }),
+    card.animate(
+      [
+        { opacity: 1, transform: 'none' },
+        { opacity: 0.2, transform: to },
+      ],
+      { duration: 180, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+    ),
+  ];
+  Promise.all(state.animations.map((a) => a.finished.catch(() => {}))).then(() => {
+    for (const anim of state.animations) anim.cancel();
+    done();
+  });
+}
+
+$('art-viewer').addEventListener('click', closeArtViewer);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('art-viewer').hidden) {
+    event.preventDefault();
+    closeArtViewer();
+  }
+});
+$('now-art').addEventListener('click', () => {
+  const item = view && view.room && view.room.current;
+  if (item && item.thumbnail) openArtViewer(item, $('now-art'));
+});
 
 function icon(id) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
