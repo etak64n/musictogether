@@ -31,11 +31,21 @@ let settingsOpen = location.hash === '#settings';
 if (settingsOpen) history.replaceState(null, '', location.pathname + location.search);
 
 // A newer release, which the room server or GitHub told of, is shown above
-// everything else until the extension is updated, also when it comes while the
-// popup is open.
+// everything else on every screen until the extension is updated, also when it
+// comes while the popup is open.
 let updateUrl = '';
+function isNewerVersion(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const difference = (pa[i] || 0) - (pb[i] || 0);
+    if (difference !== 0) return difference > 0;
+  }
+  return false;
+}
 function showUpdate(found) {
-  const known = Boolean(found && found.version && found.url);
+  const current = typeof chrome.runtime?.getManifest === 'function' ? chrome.runtime.getManifest().version : '';
+  const known = Boolean(found && found.version && found.url && (!current || isNewerVersion(found.version, current)));
   $('update').hidden = !known;
   if (!known) return;
   updateUrl = found.url;
@@ -48,6 +58,10 @@ showUpdate(update);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.update) showUpdate(changes.update.newValue);
 });
+// Ask the service worker to check GitHub when the popup opens, so every screen
+// (outside a room, lobby, setup, settings, or no YouTube Music tab) shows an
+// available update without waiting to join a room.
+chrome.runtime.sendMessage?.({ type: 'check-update' })?.catch?.(() => {});
 
 // The same page opens as a mini window under the button or in Chrome's side
 // panel, as the settings say. The side panel fills the width that Chrome gives
