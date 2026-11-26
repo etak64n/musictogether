@@ -17,7 +17,10 @@ async function applyDisplay() {
 }
 
 applyDisplay().catch(() => {});
-chrome.runtime.onStartup.addListener(() => applyDisplay().catch(() => {}));
+chrome.runtime.onStartup.addListener(() => {
+  applyDisplay().catch(() => {});
+  checkUpdate().catch(() => {});
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.display) applyDisplay().catch(() => {});
 });
@@ -25,11 +28,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Chrome updates this extension only when someone replaces its folder, so the
 // extension learns of new releases: from the room server, which tells the
 // members of a room as soon as it finds one, and from GitHub, which the
-// extension asks once a day. A newer version is kept as "update" for the
-// popup, which shows a notice with a link to it.
+// extension checks when the popup opens (at most every 10 minutes), on browser
+// startup, and periodically in the background. A newer version is kept as
+// "update" for the popup, which shows a notice with a link to it on every screen.
 const LATEST_RELEASE = 'https://api.github.com/repos/etak64n/musictogether/releases/latest';
 const RELEASES_PAGE = 'https://github.com/etak64n/musictogether/releases/';
 const UPDATE_ALARM = 'check-update';
+const UPDATE_PERIOD_MINUTES = 6 * 60;
+const UPDATE_COOLDOWN_MS = 10 * 60 * 1000;
 
 // Whether version a, such as 0.10.0, comes after version b, such as 0.9.1.
 function isNewer(a, b) {
@@ -42,11 +48,24 @@ function isNewer(a, b) {
   return false;
 }
 
-async function checkUpdate() {
-  const response = await fetch(LATEST_RELEASE, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
-  if (!response.ok) return;
-  const release = await response.json();
-  await noteRelease(String(release.tag_name || '').replace(/^v/, ''), release.html_url);
+let checkingUpdate = null;
+
+async function checkUpdate({ force = false } = {}) {
+  if (checkingUpdate) return checkingUpdate;
+  checkingUpdate = (async () => {
+    if (!force) {
+      const { updateCheckedAt } = await chrome.storage.local.get('updateCheckedAt');
+      if (typeof updateCheckedAt === 'number' && Date.now() - updateCheckedAt < UPDATE_COOLDOWN_MS) return;
+    }
+    const response = await fetch(LATEST_RELEASE, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    if (!response.ok) return;
+    const release = await response.json();
+    await chrome.storage.local.set({ updateCheckedAt: Date.now() });
+    await noteRelease(String(release.tag_name || '').replace(/^v/, ''), release.html_url);
+  })().finally(() => {
+    checkingUpdate = null;
+  });
+  return checkingUpdate;
 }
 
 // Keeps a release that is newer than this extension, and forgets the notice
@@ -65,14 +84,16 @@ async function noteRelease(version, url) {
 // The alarm is made once, so that the service worker, which Chrome starts
 // again and again, does not move the next check each time it starts.
 chrome.alarms.get(UPDATE_ALARM).then((alarm) => {
-  if (!alarm) chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+  if (!alarm || alarm.periodInMinutes !== UPDATE_PERIOD_MINUTES) {
+    chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: UPDATE_PERIOD_MINUTES });
+  }
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === UPDATE_ALARM) checkUpdate().catch(() => {});
+  if (alarm.name === UPDATE_ALARM) checkUpdate({ force: true }).catch(() => {});
 });
 // A new version of the extension forgets the notice of the old one, and looks again.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.remove('update').then(() => checkUpdate()).catch(() => {});
+  chrome.storage.local.remove(['update', 'updateCheckedAt']).then(() => checkUpdate({ force: true })).catch(() => {});
 });
 
 async function getRoomTab() {
@@ -97,8 +118,14 @@ async function tellTabs(inRoom) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message) return false;
+  // The popup has no tab, and asks for a release check whenever it opens on any screen.
+  if (message.type === 'check-update') {
+    checkUpdate().catch(() => {});
+    return false;
+  }
   const tabId = sender.tab && sender.tab.id;
-  if (tabId === undefined || !message) return false;
+  if (tabId === undefined) return false;
 
   if (message.type === 'room-joined') {
     getRoomTab().then(async (previous) => {
