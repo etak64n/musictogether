@@ -28,6 +28,7 @@ let configured = Boolean(server && token);
 // The settings show in the popup in place of everything else. A popup that
 // reloads to change its language opens on them again, with #settings.
 let settingsOpen = location.hash === '#settings';
+let settingsTransition = null;
 if (settingsOpen) history.replaceState(null, '', location.pathname + location.search);
 
 // A newer release, which the room server or GitHub told of, is shown above
@@ -254,8 +255,14 @@ function render() {
   else if (unreachable) section = 'reload';
   else if (view && view.status !== 'idle') section = 'room';
   else if (view) section = configured ? 'lobby' : 'setup';
-  for (const name of ['no-tab', 'reload', 'setup', 'lobby', 'room']) $(name).hidden = settingsOpen || name !== section;
-  $('settings-view').hidden = !settingsOpen;
+  for (const name of ['no-tab', 'reload', 'setup', 'lobby', 'room']) {
+    const el = $(name);
+    const keepLeaving = settingsTransition && settingsTransition.leaving === el;
+    el.hidden = !keepLeaving && (settingsOpen || name !== section);
+  }
+  const settingsEl = $('settings-view');
+  const keepSettingsLeaving = settingsTransition && settingsTransition.leaving === settingsEl;
+  settingsEl.hidden = !keepSettingsLeaving && !settingsOpen;
   $('settings').setAttribute('aria-pressed', String(settingsOpen));
   $('leave').hidden = settingsOpen || section !== 'room';
 
@@ -1412,12 +1419,110 @@ $('open-site-settings').addEventListener('click', () => {
 });
 
 // The gear opens the settings in the popup, and closes them again. It stays
-// lit while they are open.
+// lit while they are open. Opening unfolds the setting cards from the gear
+// with a slight stagger; closing folds them back toward it.
+const VIEW_SECTIONS = ['no-tab', 'reload', 'setup', 'lobby', 'room', 'settings-view'];
+const SETTINGS_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+function visibleView() {
+  for (const id of VIEW_SECTIONS) {
+    const el = $(id);
+    if (!el.hidden) return el;
+  }
+  return null;
+}
+
+function finishSettingsTransition() {
+  if (!settingsTransition) return;
+  const { leaving, entering, animations } = settingsTransition;
+  settingsTransition = null;
+  for (const anim of animations) anim.cancel();
+  const main = document.querySelector('main');
+  main.classList.remove('view-transitioning');
+  if (leaving) {
+    leaving.classList.remove('view-leaving');
+    leaving.style.top = '';
+    leaving.hidden = true;
+  }
+  if (entering) entering.classList.remove('view-entering');
+}
+
+function animateSettingsTransition(fromEl, fromTop, toEl, open) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !toEl || fromEl === toEl) return;
+  const main = document.querySelector('main');
+  const animations = [];
+  main.classList.add('view-transitioning');
+  toEl.classList.add('view-entering');
+  if (fromEl) {
+    fromEl.hidden = false;
+    fromEl.classList.add('view-leaving');
+    fromEl.style.top = `${fromTop}px`;
+    animations.push(
+      fromEl.animate(
+        open
+          ? [
+              { opacity: 1, transform: 'none' },
+              { opacity: 0, transform: 'translateY(6px) scale(0.985)' },
+            ]
+          : [
+              { opacity: 1, transform: 'none' },
+              { opacity: 0, transform: 'translateY(-8px) scale(0.97)' },
+            ],
+        { duration: 160, easing: SETTINGS_EASE, fill: 'forwards' }
+      )
+    );
+  }
+  if (open) {
+    [...toEl.querySelectorAll(':scope > .panel')].forEach((panel, index) => {
+      animations.push(
+        panel.animate(
+          [
+            { opacity: 0, transform: 'translateY(-10px) scale(0.96)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          { duration: 240, delay: 25 + index * 45, easing: SETTINGS_EASE, fill: 'backwards' }
+        )
+      );
+    });
+  } else {
+    animations.push(
+      toEl.animate(
+        [
+          { opacity: 0, transform: 'translateY(6px) scale(0.985)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 210, delay: 20, easing: SETTINGS_EASE, fill: 'backwards' }
+      )
+    );
+    if (!$('leave').hidden) {
+      animations.push(
+        $('leave').animate(
+          [
+            { opacity: 0, transform: 'scale(0.92)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          { duration: 180, easing: 'ease-out', fill: 'backwards' }
+        )
+      );
+    }
+  }
+  const current = { leaving: fromEl, entering: toEl, animations };
+  settingsTransition = current;
+  Promise.all(animations.map((a) => a.finished.catch(() => {}))).then(() => {
+    if (settingsTransition === current) finishSettingsTransition();
+  });
+}
+
 function showSettings(open) {
+  finishSettingsTransition();
+  const fromEl = visibleView();
+  const fromTop = fromEl ? fromEl.offsetTop : 0;
   settingsOpen = open;
   $('settings-error').hidden = true;
   showSaved(false);
   render();
+  const toEl = visibleView();
+  animateSettingsTransition(fromEl, fromTop, toEl, open);
   document.scrollingElement.scrollTop = 0;
   if (open && !configured) $('server').focus();
 }

@@ -141,7 +141,25 @@ h1 {
 }
 
 main {
+  position: relative;
   padding: 0 10px 10px;
+}
+
+main.view-transitioning {
+  overflow: hidden;
+}
+
+.view-entering {
+  position: relative;
+  z-index: 1;
+}
+
+.view-leaving {
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* A newer release on GitHub: a quiet line above everything else, which opens
@@ -448,11 +466,31 @@ main {
   font-weight: 900;
 }
 
-/* The gear stays lit while the settings are open. */
+/* The gear stays lit and turns smoothly while the settings are open. */
+.topbar #settings {
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.topbar #settings .icon {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .topbar #settings[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.topbar #settings[aria-pressed="true"] .icon {
+  transform: rotate(90deg);
+}
+
+#settings-view,
+#settings-view > .panel {
+  transform-origin: top right;
 }
 
 /* A choice of a few options, side by side in columns of the same width. The
@@ -531,6 +569,11 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .save.saved .icon {
     animation: none;
+  }
+
+  .topbar #settings,
+  .topbar #settings .icon {
+    transition: none;
   }
 }
 
